@@ -15,7 +15,10 @@ namespace JasLogCli
         LOG_TO_FILE = 1 << 0,
         LOG_TO_SYSTEM_DEBUG_LOG = 1 << 1,
         LOG_TO_ALL = LOG_TO_FILE | LOG_TO_SYSTEM_DEBUG_LOG,
-        LOG_DEFAULT = LOG_TO_SYSTEM_DEBUG_LOG
+        LOG_DEFAULT = LOG_TO_SYSTEM_DEBUG_LOG,
+		LOG_TO_WINEVENT_LOG     = 1 << 2, /*生成windows事件日志*/
+		LOG_TO_WINCONSOLE_LOG   = 1 << 3, /*生成windows console*/
+		LOG_TO_WINGUI_LOG       = 1 << 4, /*生成windows log dialog*/
     }
 
     public enum EJasLogLocking
