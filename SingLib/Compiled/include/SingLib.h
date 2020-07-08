@@ -12,6 +12,7 @@
 ------------------------------------------------------------------------------
 Change Log:
   2019-09-26        H.Z.XIN        Create
+  2020-05-20        H.Z.XIN        Update some api
 *****************************************************************************/
 
 #ifndef _WINDOWS_
@@ -160,6 +161,7 @@ JOHN_DLL int FORCE_CDECL Str_CalcReqSizeW(const wchar_t* pstrFmt, ...);
 JOHN_DLL int FORCE_CDECL Str_CalcReqSizeVA(const char* pstrFmt, va_list ap);
 JOHN_DLL int FORCE_CDECL Str_CalcReqSizeVW(const wchar_t* pstrFmt, va_list ap);
 
+//如果src==NULL的话，返回NULL
 JOHN_DLL char* FORCE_CDECL Str_DupPtrA(const char* src);
 JOHN_DLL wchar_t* FORCE_CDECL Str_DupPtrW(const wchar_t* src);
 
@@ -202,6 +204,9 @@ JOHN_DLL int Str_WildCompareW(const wchar_t *pstrLong, const wchar_t *wild);
 // Str_SimpleMatchA("127.0.0.0",  "12*.0.*1", false)
 JOHN_DLL bool Str_SimpleMatchA(const char* pstrLong, const char* pattern, bool caseSensitive/*=false*/);
 JOHN_DLL bool Str_SimpleMatchW(const wchar_t* pstrLong, const wchar_t* pattern, bool caseSensitive/*=false*/);
+
+JOHN_DLL bool Str_IsWhitespaceA(char ch);
+JOHN_DLL bool Str_IsWhitespaceW(wchar_t ch);
 
 // 移除两端空格, \r\n等空白字符
 JOHN_DLL bool Str_TrimInplaceA(char* lpString);
@@ -432,6 +437,8 @@ JOHN_DLL uint32_t Byte_RandomUint32();
 JOHN_DLL uint32_t Byte_RandomUint32NonZero();
 JOHN_DLL uint64_t Byte_RandomUint64();
 JOHN_DLL double Byte_RandomDouble();
+//会自动添加NULL，cchBuf包含了NULL
+JOHN_DLL bool Byte_RandomStr(size_t cchBuf, char* buf);
 JOHN_DLL char* Byte_RandomStrPtr(size_t n);
 
 //产生随机数[min, max]
@@ -503,6 +510,11 @@ JOHN_DLL void OS_GetDefaultLangID(LANGID* psysLang, LANGID* puserLang);
 
 //CPxxx
 JOHN_DLL const char* Str_GetDefaultCodePage();
+JOHN_DLL const char* Str_GetInputCodePage();
+
+//ex: 936, 950, ...
+bool Str_IsDBCSCodePage(int codePage);
+bool Str_IsDBCSLeadByte(int dbcsCodePage, char ch);
 
 // mbcs OEM char* <----> wchar_t*
 JOHN_DLL wchar_t* Str_MbcsToUnicodePtr(const char* szStr, UINT cp/*=CP_ACP*/);
@@ -513,6 +525,10 @@ JOHN_DLL char* Str_UnicodeToUtf8Ptr(const wchar_t* UnicodeStr);
 
 JOHN_DLL char* Str_MbcsToUtf8Ptr(const char* strSource, UINT cp/* = CP_ACP*/);
 JOHN_DLL char* Str_Utf8ToMbcsPtr(const char* strSource, UINT cp/* = CP_ACP*/);
+
+// nSrc是字节数
+JOHN_DLL wchar_t* Str_MbcsToUnicodeNPtr(const BYTE* bySrc, size_t nSrc, UINT cp/*=CP_ACP*/);
+JOHN_DLL wchar_t* Str_Utf8ToUnicodeNPtr(const BYTE* bySrc, size_t nSrc);
 
 //相当于code page转换
 //GBK             936
@@ -538,7 +554,7 @@ JOHN_DLL bool Str_IsLegalBIG5(const void* stream, unsigned length);
 
 
 typedef enum {
-	conversionOK = 0, 		/* conversion successful */
+	conversionOK = 0, 	/* conversion successful */
 	sourceExhausted,	/* partial character in source, but hit end */
 	targetExhausted,	/* insuff. room in target for conversion */
 	sourceIllegal		/* source sequence is illegal/malformed */
@@ -552,12 +568,12 @@ typedef enum {
 // UTF8 <---> UTF16
 //似乎对UTF16 BE支持得不好
 JOHN_DLL
-ConversionResult ConvertUTF16toUTF8(
+ConversionResult Str_UTF16toUTF8(
 	const uint16_t** sourceStart, const uint16_t* sourceEnd,
 	uint8_t** targetStart, uint8_t* targetEnd, ConversionFlags flags);
 
 JOHN_DLL
-ConversionResult ConvertUTF8toUTF16(
+ConversionResult Str_UTF8toUTF16(
 	const uint8_t** sourceStart, const uint8_t* sourceEnd,
 	uint16_t** targetStart, uint16_t* targetEnd, ConversionFlags flags);
 
@@ -580,18 +596,21 @@ JOHN_DLL char* Num_StrDoublePtr(double val);
 
 //最多保留16位小数, Mem_free释放内存
 //2.225073858507201e-308
-JOHN_DLL char* Num_StrLongDoublePtr(long double* pval);
+JOHN_DLL char* Num_StrLongDoublePtr(const long double* pval);
 
 // 0xXXXXXXXX
-JOHN_DLL const char* Num_StrAddress(void* pval);
+JOHN_DLL const char* Num_StrAddress(const void* pval);
 // "true"
 // "false"
 JOHN_DLL const char* Num_StrBool(bool val);
 
 JOHN_DLL int32_t Str_Int32(const char* pstr);
-JOHN_DLL uint32_t Str_UInt32(const char* pstr);
 JOHN_DLL int64_t Str_Int64(const char* pstr);
+
+//支持十进制字符串，也支持0x12345678十六进制字符串
+JOHN_DLL uint32_t Str_UInt32(const char* pstr);
 JOHN_DLL uint64_t Str_UInt64(const char* pstr);
+
 JOHN_DLL float Str_Float(const char* pstr);
 JOHN_DLL double Str_Double(const char* pstr);
 
@@ -771,26 +790,56 @@ JOHN_DLL SList* SListGet(SList *psList, int nPosition);
 JOHN_DLL SList* SListGetLast(SList *psList);
 
 //迭代容器
-//SList* pCur = pList;
-//while (pCur)
-//{
-//	printf("item %02d = %d\n", i++, (int)SListGetData(pCur));
-//	pCur = SListGetNext(pCur);
-//}
+#if 0
+SList* pCur = pList;
+while (pCur)
+{
+	printf("item %02d = %d\n", i++, (int)SListGetData(pCur));
+	pCur = SListGetNext(pCur);
+}
+#endif
 JOHN_DLL SList* SListGetNext(SList *psElement);
 
-JOHN_DLL void* SListGetData(SList *psElement);
+JOHN_DLL void* SListGetData(const SList *psElement);
 //先SListGet, 再SListGetData
-JOHN_DLL void* SListGetItemData(SList *psList, int nPosition);
+JOHN_DLL void* SListGetItemData(const SList *psList, int nPosition);
 
 //O(n)
-JOHN_DLL int SListCount(SList *psList);
+JOHN_DLL int SListCount(const SList *psList);
 
 // nPosition = 0 ~ n-1
 JOHN_DLL SList* SListRemove(SList *psList, int nPosition);
+JOHN_DLL SList* SListRemoveElement(SList *psList, SList *psElement);
 
-typedef void* PfnSListWalk(SList *psElement, void* pExtra);
-JOHN_DLL void SListWalk(SList *psElement, PfnSListWalk pfn, void* pExtra);
+
+typedef bool (*PfnSListFind)(void* pe, void* pFind);
+JOHN_DLL SList* SListFind(SList *psList, PfnSListFind pfn, void *pFind);
+
+typedef void* (*PfnSListWalk)(SList *psElement, void* pExtra);
+JOHN_DLL void SListWalk(SList *psList, PfnSListWalk pfn, void* pExtra/*=NULL*/);
+
+//返回true的话，中止后续扫描
+typedef bool (*PfnSListWalkUntil)(SList *psElement, void* pExtra);
+JOHN_DLL void SListWalkUntil(SList *psList, PfnSListWalkUntil pfn, void* pExtra/*=NULL*/);
+
+//简单排序
+#if 0
+int MyCmp(const SList* pItem1, const SList* pItem2)
+{
+	void* pd1 = SListGetData(*(SList**)pItem1); //!
+	void* pd2 = SListGetData(*(SList**)pItem2);
+	return (int)pd1 - (int)pd2;
+}
+
+SList* pList = NULL;
+pList = SListAppend(pList, (void*)(123));
+pList = SListAppend(pList, (void*)456);
+pList = SListSort(pList, MyCmp);
+
+#endif
+typedef int (*PfnSListCompare)(const SList* pItem1, const SList* pItem2);
+JOHN_DLL SList* SListSort(SList *psList, PfnSListCompare pfnCompare);
+
 
 // windows relate
 JOHN_DLL void WaitCursor_Begin();
@@ -916,6 +965,7 @@ JOHN_DLL char* OS_EnvGetPtrA(const char* pstrEnv, bool bExpand/*=false*/);
 JOHN_DLL wchar_t* OS_EnvGetPtrW(const wchar_t* pstrEnv, bool bExpand/*=false*/);
 
 //简单get/set
+// cchVal包含NULL
 // 只影响本进程
 JOHN_DLL BOOL OS_EnvGetA(const char* pstrEnv, char* pstrVal, size_t cchVal);
 JOHN_DLL BOOL OS_EnvGetW(const wchar_t* pstrEnv, wchar_t* pstrVal, size_t cchVal);
@@ -1101,7 +1151,19 @@ JOHN_DLL BOOL Bitmap_TransparentBlt(
 	UINT crTransparent
 );
 
+//bmp only
 JOHN_DLL BOOL Bitmap_ToFile(HBITMAP hBitmap, const wchar_t* lpFileName);
+//support bmp,jpg,png,gif,tif
+//nQuality: 0~100
+JOHN_DLL BOOL Bitmap_ToFileEx(HBITMAP hBitmap, const wchar_t* lpFileName, BYTE nQuality/*=90*/);
+
+JOHN_DLL void Bitmap_Flip(HBITMAP bitmap, int width, int height);
+
+// 加载(.BMP .DIB .EMF .GIF .ICO .JPG .WMF)
+JOHN_DLL HBITMAP Bitmap_Load(const wchar_t *pszFileName, COLORREF clrBack/*=-1*/);
+JOHN_DLL HBITMAP Bitmap_LoadFromBuffer(const BYTE* pData, DWORD cbData, COLORREF clrBack/*=-1*/);
+
+
 
 // date time relate
 
@@ -1228,7 +1290,9 @@ JOHN_DLL BOOL Win_ModifyStyleEx(
 // 返回hr错误号的解释
 // 需要Mem_free()释放
 // hr 可以是GetLastError()的返回值，也可以是COM函数返回值。
-// dwLangId = MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT);
+// dwLangId = MAKELANGID LANG_NEUTRAL, SUBLANG_DEFAULT);
+// 常用的是LANG_SYSTEM_DEFAULT, LANG_USER_DEFAULT
+// english: MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US)
 //
 JOHN_DLL
 char* Win_GetHRMessagePtrA(
@@ -1416,7 +1480,16 @@ JOHN_DLL bool Path_IsExist(const wchar_t* filepath_in, bool bCheckDir);
 
 // 一次创建多层目录
 JOHN_DLL BOOL Path_CreateDirRecur(const wchar_t* full_path);
+// 删除多层目录，与Path_Recycle功能一样
+// pszPath以\\结尾，容量最少应当为wcslen(pszPath)+2
+// 返回值是GetLastError(), 成功ERROR_SUCCESS
+JOHN_DLL DWORD Path_DeleteDirRecur(wchar_t* pszPath);
 
+
+// 扫描，返回所有匹配的文件的全路径
+// extTypeFilter应当类似于： "*.dll", "123?.txt"
+// 使用SListDeepFree释放内存
+SList* Path_GetFilesInFolderPtrW(const wchar_t* inFolder, const wchar_t* extTypeFilter);
 
 //取得已加载dll模块的位置
 // bShortName==true,路径过长的话，转换成DOS短路径
@@ -1457,6 +1530,181 @@ JOHN_DLL BOOL File_SetWritable(const wchar_t *path, BOOL bWritable);
 JOHN_DLL BOOL File_SetHidden(const wchar_t *path, BOOL hidden);
 //修改最后访问时间
 JOHN_DLL BOOL File_Touch(const wchar_t* path);
+
+//Config file
+typedef struct TConf_tag TConf;
+
+typedef enum
+{
+	// note: 测试是否成功，应该用 (retval >= 0)
+	TCE_OK = 0,        //No error
+	TCE_UPDATED = 1,   //An existing value was updated
+	TCE_INSERTED = 2,  //A new value was inserted
+
+	// note: 测试是否失败，应该用 (retval < 0)
+	TCE_FAIL = -1,    //Generic failure
+	TCE_NOMEM = -2,   //Out of memory error
+	TCE_FILE = -3     //File error (see errno for detail error)
+} TCONF_ERR;
+
+//文本的编码
+typedef enum
+{
+	TConf_DT_MBCS,
+	TConf_DT_UTF8,
+	TConf_DT_WCHAR
+} TConf_DataType;
+
+JOHN_DLL TConf* Conf_new(TConf_DataType charType/*=TConf_DT_MBCS*/, bool bCaseSent/*=false*/, bool bMultiLine/*=false*/);
+JOHN_DLL void Conf_free(TConf* pconf);
+JOHN_DLL void Conf_reset(TConf* pconf);
+
+JOHN_DLL void Conf_SetDataType(TConf* pconf, TConf_DataType dt);
+JOHN_DLL TConf_DataType Conf_GetDataType(const TConf* pconf);
+JOHN_DLL void Conf_SetMultiLine(TConf* pconf, bool bMultiLine/*=false*/);
+JOHN_DLL bool Conf_IsMultiLine(const TConf* pconf);
+JOHN_DLL void Conf_SetUseSpaces(TConf* pconf, bool bSpaces/* = true*/);
+JOHN_DLL bool Conf_IsUsingSpaces(const TConf* pconf);
+JOHN_DLL bool Conf_IsEmpty(const TConf* pconf);
+
+//加载数据
+JOHN_DLL TCONF_ERR Conf_LoadFileA(TConf* pconf, const char* pszFile);
+JOHN_DLL TCONF_ERR Conf_LoadFileW(TConf* pconf, const wchar_t* pwszFile);
+JOHN_DLL TCONF_ERR Conf_LoadData(TConf* pconf, const BYTE* byData, size_t byLen);
+
+JOHN_DLL TCONF_ERR Conf_SaveFileA(TConf* pconf, const char* pszFile, bool bAddSign);
+JOHN_DLL TCONF_ERR Conf_SaveFileW(TConf* pconf, const wchar_t* pwszFile, bool bAddSign);
+JOHN_DLL TCONF_ERR Conf_SaveDataBuf(TConf* pconf, Johnbuf* buf, bool bAddSign);
+
+//Section下key的个数
+JOHN_DLL int Conf_GetSectionKeyCount(TConf* pconf, const wchar_t* pSection);
+
+//SList内存放的wchar_t*由内部管理，不需要释放。仅需要释放SList*
+JOHN_DLL SList* Conf_GetAllSections(TConf* pconf);
+JOHN_DLL SList* Conf_GetSectionAllKeys(TConf* pconf, const wchar_t* pSection);
+
+JOHN_DLL
+const wchar_t* Conf_GetValueW(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	const wchar_t* pstrDefault/*=NULL*/
+);
+
+//mbcs版本，要自己Mem_free
+JOHN_DLL
+char* Conf_GetValueAPtr(
+	TConf* pconf,
+	const char* pstrSection,
+	const char* pstrKey,
+	const char* pstrDefault/*=NULL*/
+);
+
+//创建Section或key
+JOHN_DLL
+TCONF_ERR Conf_SetValueW(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	const wchar_t* pstrValue,
+	const wchar_t* pstrComment/* = NULL*/
+);
+
+JOHN_DLL
+TCONF_ERR Conf_SetValueA(
+	TConf* pconf,
+	const char* pstrSection,
+	const char* pstrKey,
+	const char* pstrValue,
+	const char* pstrComment/* = NULL*/
+);
+
+JOHN_DLL
+bool Conf_GetBoolValue(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	bool           bDefault/*=false*/
+);
+
+JOHN_DLL
+TCONF_ERR Conf_SetBoolValue(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	bool           bValue,
+	const wchar_t* pstrComment /*= NULL*/
+);
+
+//支持10进制数字，以及0x12345678十六进制字符串
+JOHN_DLL
+long Conf_GetLongValue(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	long           nDefault/*=0*/
+);
+
+JOHN_DLL
+TCONF_ERR Conf_SetLongValue(
+	TConf* pconf,
+	const wchar_t*  pstrSection,
+	const wchar_t*  pstrKey,
+	long            nValue,
+	const wchar_t*  pstrComment/* = NULL*/,
+	bool            bUseHex/* = false*/
+);
+
+JOHN_DLL
+double Conf_GetDoubleValue(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	double         nDefault/*=0.0*/
+);
+
+JOHN_DLL
+TCONF_ERR Conf_SetDoubleValue(
+	TConf* pconf,
+	const wchar_t*  pstrSection,
+	const wchar_t*  pstrKey,
+	double          nValue,
+	const wchar_t*  pstrComment/* = NULL*/
+);
+
+JOHN_DLL
+int64_t Conf_GetInt64Value(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey,
+	int64_t        nDefault/*=0LL*/
+);
+
+JOHN_DLL
+TCONF_ERR Conf_SetInt64Value(
+	TConf* pconf,
+	const wchar_t*  pstrSection,
+	const wchar_t*  pstrKey,
+	int64_t         nValue,
+	const wchar_t*  pstrComment/* = NULL*/,
+	bool            bUseHex/* = false*/
+);
+
+
+JOHN_DLL 
+bool Conf_DeleteValue(
+	TConf*         pconf,
+	const wchar_t* pstrSection,
+	const wchar_t* pstrKey
+);
+
+JOHN_DLL
+bool Conf_DeleteSection(
+	TConf* pconf,
+	const wchar_t* pstrSection,
+	bool           bRemoveEmpty/*=true*/
+);
+
 
 //Resource
 JOHN_DLL bool Resource_Load(HMODULE hMod, LPCWSTR Type, LPCWSTR ID, HRSRC* hoResource, HGLOBAL* hoGlobal);
@@ -1575,6 +1823,23 @@ JOHN_DLL bool Ciper_setkeyStr(TCiper c, const char *key);
 JOHN_DLL void Ciper_encrypt(TCiper c, void *blk, int len);
 JOHN_DLL void Ciper_decrypt(TCiper c, void *blk, int len);
 
+//封装以上两个方法
+//从pRawData复制数据到blk，不足blkLen的话，填充NULL。再实施加密，解密。
+//// Sample:
+/*
+int nRemaing = nRawData;
+const BYTE* pSrc = (BYTE*)pstrDecode;
+for (BYTE* ptr = (BYTE*)pstrEncoded;
+	nRemaing > 0;
+	nRemaing -= nIVorBlkLen)
+{
+	int nData = min(nIVorBlkLen, nRemaing);
+	Ciper_CryptEx(pciperDec, false, ptr, nIVorBlkLen, pSrc, nData);
+	ptr += nData;
+	pSrc += nData;
+}
+*/
+JOHN_DLL bool Ciper_CryptEx(TCiper c, bool bEncrypt, void *blk, int blkLen, const void* pRawData, int rawDataLen);
 
 typedef enum _EHashKind
 {
