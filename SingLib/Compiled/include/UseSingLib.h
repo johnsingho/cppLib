@@ -46,7 +46,7 @@
 #endif
 #else
 //release
-#error **not have Release version!
+//#error **not have Release version!
 #endif
 
 #else //x86
@@ -62,7 +62,7 @@
 #endif
 #else
 //release
-#error **not have Release version!
+//#error **not have Release version!
 #endif
 
 #endif
@@ -82,9 +82,9 @@
 
 /////////////////////////////////////////////////
 
-
+#ifdef _MSC_VER
 #pragma comment(lib, "../lib/" JF_BIT JF_DEBUG  "/dll/" "SingLib" JF_BIT JF_DEBUG ".lib") 
-
+#endif
 
 //for include:  $(HELIB)\SingLib\Compiled\include
 //for lib:      $(HELIB)\SingLib\Compiled\lib

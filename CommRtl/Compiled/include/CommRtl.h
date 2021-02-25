@@ -14,6 +14,7 @@ Change Log:
   2020-07-15        H.Z.XIN        Create
   2020-09-10        H.Z.XIN        update nettool
   2020-09-18        H.Z.XIN        update CryptTool
+  2021-02-11        H.Z.XIN        add CCommRtlPtr
 *****************************************************************************/
 
 #if defined(_MSC_VER)
@@ -140,7 +141,7 @@ typedef enum _ETypeID
 
 struct COMMRTL_DLL IRtlBase
 {
-	IRtlBase(ETypeID tid)
+	explicit IRtlBase(ETypeID tid)
 		:m_nRef(0)
 		, m_typeid(tid)
 	{
@@ -150,8 +151,94 @@ struct COMMRTL_DLL IRtlBase
 	unsigned int AddRef();
 	unsigned int Release();
 private:
+	IRtlBase();
 	volatile unsigned int m_nRef;
 	ETypeID      m_typeid;
+};
+
+//sample:
+// 	CCommRtlPtr<IPETool> pPETool;
+//  pPETool.CreateInstance(EType_PETool);
+//
+template <class T>
+class CCommRtlPtr
+{
+public:
+	CCommRtlPtr() throw()
+	{
+		p = NULL;
+	}
+	CCommRtlPtr(T* lp) throw()
+	{
+		p = lp;
+	}
+	~CCommRtlPtr() throw()
+	{
+		if(p) {
+			p->Release();
+		}	
+	}
+	inline operator T*() const throw()
+	{
+		return p;
+	}
+	inline T& operator*() const
+	{
+		//assert(p != NULL);
+		return *p;
+	}	
+	inline T** operator&() throw()
+	{
+		//assert(p != NULL);
+		return &p;
+	}
+	inline T* operator->() const throw()
+	{
+		//assert(p != NULL);
+		return p;
+	}
+	inline bool operator!() const throw()
+	{
+		return (p == NULL);
+	}
+
+	// Release the interface and set to NULL
+	void Release() throw()
+	{
+		T* pTemp = p;
+		if (pTemp)
+		{
+			p = NULL;
+			pTemp->Release();
+		}
+	}
+
+	void Attach(T* p2) throw()
+	{
+		if (p == p2) { return; }
+		if(p)
+		{
+			p->Release();			
+		}
+		p = p2;
+	}
+	T* Detach() throw()
+	{
+		T* pt = p;
+		p = NULL;
+		return pt;
+	}
+
+	//创建对象，此函数应该只调用一次	
+	bool CreateInstance(ETypeID tid) throw()
+	{
+		//assert(!p);
+		//TODO: ETypeID --- IRtlBase
+		p = dynamic_cast<T*>(QueryInterface(tid));
+		return p!=NULL;
+	}
+private:
+	T* p;
 };
 
 
@@ -159,17 +246,24 @@ extern "C"
 {
 COMMRTL_DLL IRtlBase* QueryInterface(ETypeID tid);
 
+//sample:
+// MyQueryInterface(IPETool, EType_PETool, pPETool);
+// 需要手动Release()来释放
+#define MyQueryInterface(itype, itypeID, pvar) \
+		itype* pvar=(itype*)QueryInterface(itypeID)
+
 // memory relate
 COMMRTL_DLL void* Mem_malloc(size_t size);
 //除了参数区别外，*calloc会初始化内存块为0，而*malloc不会。
 COMMRTL_DLL void* Mem_calloc(size_t num, size_t size);
 COMMRTL_DLL void Mem_free(void* ptr);
 COMMRTL_DLL void* Mem_realloc(void* ptr, size_t size);
+
 #ifndef Mem_mallocTP
 #define Mem_mallocTP(tp)                ((tp*)Mem_malloc(sizeof(tp)))
 #define Mem_callocTP(tp,n)              ((tp*)Mem_calloc((n),sizeof(tp)))
 #define Mem_Amalloc(cch)				((char*)Mem_malloc(cch))
-#define Mem_Wmalloc(cch)				((wchar_t*)Mem_malloc(sizeof(wchar_t)*cch))
+#define Mem_Wmalloc(cch)				((wchar_t*)Mem_malloc(sizeof(wchar_t)*(cch)))
 #endif//Mem_mallocTP
 
 // mbcs OEM char* <----> wchar_t*
@@ -845,14 +939,20 @@ public:
 class IHashTool : public IRtlBase
 {
 public:
-	IHashTool() : IRtlBase(EType_HashTool) {}
+	IHashTool() :IRtlBase(EType_HashTool) {}
 
 	virtual uint32_t Crc32(uint32_t crc, const unsigned char* buf, size_t len)=0;
 	virtual uint64_t Crc64(const void *data, size_t size) = 0;
 	
 	virtual char* MD5_StrPtr(const char *pszText) = 0;
 	virtual char* SHA1_StrPtr(const char *pszText) = 0;
+	virtual char* SHA256_StrPtr(const char* pszText) = 0;
+	virtual char* SHA3_256_StrPtr(const char* pszText) = 0;
 
+	virtual char* MD5_BytePtr(const BYTE* pbData, size_t nData) = 0;
+	virtual char* SHA1_BytePtr(const BYTE* pbData, size_t nData) = 0;
+	virtual char* SHA256_BytePtr(const BYTE* pbData, size_t nData) = 0;
+	virtual char* SHA3_256_BytePtr(const BYTE* pbData, size_t nData) = 0;
 };
 
 /* i5-5200 2.2GHZ
@@ -903,7 +1003,7 @@ public:
 	IImageTool() : IRtlBase(EType_ImageTool) {}
 
 	virtual HBITMAP Bitmap_FromRect(HWND hWnd, RECT* pRect)=0;
-	virtual HBITMAP Bitmap_FromScreenRect(RECT* lpRect, BYTE *pData=NULL, BITMAPINFO *pHeader=NULL)=0;
+	virtual HBITMAP Bitmap_FromScreenRectEx(RECT* lpRect, BYTE *pData=NULL, BITMAPINFO *pHeader=NULL)=0;
 	//bmp only
 	virtual BOOL Bitmap_ToFile(HBITMAP hBitmap, const wchar_t* lpFileName)=0;
 	//support bmp,jpg,png,gif,tif
@@ -1030,7 +1130,7 @@ public:
 
 	//修改系统环境变量,影响系统
 	virtual BOOL SetSystemEnvW(bool bUserEnv, const wchar_t* pstrKeyName, const wchar_t* pstrVal)=0;
-	virtual BOOL DeleteSystemEnvW(bool bUserEnv, const wchar_t* pstrKeyName, const wchar_t* pstrVal)=0;
+	virtual BOOL DeleteSystemEnvW(bool bUserEnv, const wchar_t* pstrKeyName)=0;
 
 	virtual BOOL GetActiveSID(DWORD* posid)=0;
 
@@ -1326,5 +1426,34 @@ public:
 	virtual void Shutdown() = 0;
 };
 
+
+//copy from singlib
+#ifndef COMMRTL_AUTOFREE_CLS_2019_
+#define COMMRTL_AUTOFREE_CLS_2019_
+//for clear object
+template <typename T>
+class CAutoMemFree
+{
+public:
+	CAutoMemFree(T* ptr) :m_ptr(ptr) {}
+	~CAutoMemFree() { Mem_free(m_ptr); }
+	inline operator T* ()const { return m_ptr; }
+	inline T* getPtr() { return m_ptr; }
+	inline const T* getPtr()const { return m_ptr; }
+	inline T* operator->() { return m_ptr; }
+	inline const T* operator->()const { return m_ptr; }
+
+	CAutoMemFree& operator=(T* ptr)
+	{
+		Mem_free(m_ptr);
+		m_ptr = ptr;
+		return *this;
+	}
+private:
+	CAutoMemFree();
+	CAutoMemFree(const CAutoMemFree&);
+	T* m_ptr;
+};
+#endif//COMMRTL_AUTOFREE_CLS_2019_
 
 #endif// COMMRTL_H_6865_2020_07_15_

@@ -1,11 +1,11 @@
-#ifndef _SINGLIB2019_JSH_
+ï»¿#ifndef _SINGLIB2019_JSH_
 #define _SINGLIB2019_JSH_
 #pragma once
 /*****************************************************************************
 * Name     : SingLib
 * Creator  : H.Z.XIN
 * Date     : 2019-09-26
-* Function : ¹¤¾ßº¯Êı, for windows platform
+* Function : å·¥å…·å‡½æ•°, for windows platform
 * Parameter:
 * Return(s):
 * Notices  :
@@ -13,6 +13,7 @@
 Change Log:
   2019-09-26        H.Z.XIN        Create
   2020-05-20        H.Z.XIN        Update some api
+  2020-12-25        H.Z.XIN        Update some api
 *****************************************************************************/
 
 #ifndef _WINDOWS_
@@ -30,14 +31,14 @@ Change Log:
 #endif
 
 #if defined(_MSC_VER)
-//±àÒëdllÊ±¶¨Òå´Ëºê
+//ç¼–è¯‘dllæ—¶å®šä¹‰æ­¤å®
 #if defined(JOHN_EXPORTS)
 #	define JOHN_DLL __declspec(dllexport)
 #elif defined(JOHN_IMPORTS)
-//Ê¹ÓÃdllÊ±¶¨Òå´Ëºê
+//ä½¿ç”¨dllæ—¶å®šä¹‰æ­¤å®
 #	define JOHN_DLL __declspec(dllimport)
 #else
-//É¶Ò²²»¶¨Òå¿ÉÓÃ×÷¾²Ì¬¿â
+//å•¥ä¹Ÿä¸å®šä¹‰å¯ç”¨ä½œé™æ€åº“
 #	define JOHN_DLL
 #endif
 #	define JOHN_LOCAL
@@ -58,6 +59,46 @@ Change Log:
 #endif
 #endif
 
+/* Visual Studio requires '__inline' for C code */
+#if !defined(__cplusplus) && defined(_MSC_VER) && !defined(inline)
+#define inline __inline
+#endif
+
+/* Provide __func__ macro definition for Visual Studio. */
+#if defined(_MSC_VER) && !defined(__func__)
+#define __func__ __FUNCTION__
+#endif
+
+#if defined(__GNUC__)
+// GCC, Clang, and compatible compilers.
+#define PRETTY_FUNCTION __PRETTY_FUNCTION__
+#elif defined(__FUNCSIG__)
+// For MSVC; skips the __cdecl. (__PRETTY_FUNCTION__ in GCC is not a
+// preprocessor constant, but __FUNCSIG__ in MSVC is.)
+#define PRETTY_FUNCTION strchr(__FUNCSIG__, ' ') + 1
+#else
+// Standard C++; does not include the class name.
+#define PRETTY_FUNCTION __func__
+#endif
+
+#if defined(_MSC_VER)
+#define ALWAYS_INLINE __forceinline
+#else
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
+
+#if defined(_MSC_VER)
+#define NO_INLINE __declspec(noinline)
+#else
+#define NO_INLINE __attribute__((noinline))
+#endif
+
+//x64?
+#if (__amd64 || __amd64__ || _M_X64) || defined(_WIN64) || defined(WIN64) || defined(_AMD64_)
+#define ARCH_64BIT 1
+#else
+#define ARCH_64BIT 0
+#endif
 
 #ifndef JOHN_STDCALL
 #if defined(_MSC_VER) && !defined(JOHN_DISABLE_STDCALL)
@@ -115,33 +156,51 @@ typedef int64_t off64_t;
 #define SIZE_T_FORMAT "%zu"
 #endif /* _MSC_VER */
 
+//for wchar_t
+#ifndef LSTR
+#define LSTR_(value) L#value
+#define LSTR(value) LSTR_(value)
+#endif
+
 
 //-------------------------------------------------
 JOHN_C_START
 
 /////////////////////////////////////////////////////
 //forward declare
-typedef struct _SList SList;
-typedef void** PtrList;
+typedef struct _SList   SList;
+typedef struct _DList   DList;
+typedef void**          PtrList;
 typedef struct _Johnbuf Johnbuf;
+typedef struct _Strbuf  Strbuf;
 
 /////////////////////////////////////////////////////
 
 // memory relate
 JOHN_DLL void* Mem_malloc(size_t size);
-//³ıÁË²ÎÊıÇø±ğÍâ£¬*calloc»á³õÊ¼»¯ÄÚ´æ¿éÎª0£¬¶ø*malloc²»»á¡£
+//é™¤äº†å‚æ•°åŒºåˆ«å¤–ï¼Œ*callocä¼šåˆå§‹åŒ–å†…å­˜å—ä¸º0ï¼Œè€Œ*mallocä¸ä¼šã€‚
 JOHN_DLL void* Mem_calloc(size_t num, size_t size);
 JOHN_DLL void Mem_free(void * ptr);
 JOHN_DLL void* Mem_realloc(void* ptr, size_t size);
 
+#ifndef Mem_mallocTP
 #define Mem_mallocTP(tp)                ((tp*)Mem_malloc(sizeof(tp)))
 #define Mem_callocTP(tp,n)              ((tp*)Mem_calloc((n),sizeof(tp)))
+#define Mem_Amalloc(cch)				((char*)Mem_malloc(cch))
+#define Mem_Wmalloc(cch)				((wchar_t*)Mem_malloc(sizeof(wchar_t)*(cch)))
+#endif//Mem_mallocTP
 
 JOHN_DLL BOOL Mem_IsExecutableAddress(void* pAddress);
 JOHN_DLL HMODULE Mem_GetModuleHandleFromAddress(void* address);
-//´ËÄ£¿éµ±Ç°µÄHANDLE
+//æ­¤æ¨¡å—å½“å‰çš„HANDLE
 JOHN_DLL HMODULE Mem_GetCurrentModuleHandle();
 JOHN_DLL bool Mem_IsAddressInCurrentModule(void* address);
+
+// å¯¹ç¨‹åºå†…å­˜è¿›è¡ŒåŠ å¯†ä¿æŠ¤ï¼Œä»¥é˜²æ­¢åˆ«çš„ç”¨æˆ·è®¿é—®å®ƒ
+//éœ€è¦Mem_free(*pp_dst);
+size_t Mem_Encrypt(const uint8_t *p_src, size_t i_src_len, uint8_t** pp_dst);
+size_t Mem_Decrypt(const uint8_t *p_src, size_t i_src_len, uint8_t** pp_dst);
+
 
 // string relate
 JOHN_DLL int FORCE_CDECL Str_asnprintf(char* buf, size_t cchBuf, const char* format, ...);
@@ -149,48 +208,58 @@ JOHN_DLL int FORCE_CDECL Str_asnvprintf(char* buf, size_t cchBuf, const char* fo
 JOHN_DLL int FORCE_CDECL Str_wsnprintf(wchar_t* buf, size_t cchBuf, const wchar_t* format, ...);
 JOHN_DLL int FORCE_CDECL Str_wsnvprintf(wchar_t* buf, size_t cchBuf, const wchar_t* format, va_list ap);
 
-//´øptr½áÎ²µÄ£¬ĞèÒªÓÃMem_freeÊÍ·Å
+//å¸¦ptrç»“å°¾çš„ï¼Œéœ€è¦ç”¨Mem_freeé‡Šæ”¾
 JOHN_DLL char* FORCE_CDECL Str_asnprintfPtr(const char* fmt, ...);
 JOHN_DLL char* FORCE_CDECL Str_asnvprintfPtr(const char* fmt, va_list ap);
 JOHN_DLL wchar_t* FORCE_CDECL Str_wsnprintfPtr(const wchar_t* fmt, ...);
 JOHN_DLL wchar_t* FORCE_CDECL Str_wsnvprintfPtr(const wchar_t* fmt, va_list ap);
 
-//¼ÆËã»º³åÇø´óĞ¡, ²»°üº¬×îºóµÄNULL
+//è®¡ç®—ç¼“å†²åŒºå¤§å°, ä¸åŒ…å«æœ€åçš„NULL
 JOHN_DLL int FORCE_CDECL Str_CalcReqSizeA(const char* pstrFmt, ...);
 JOHN_DLL int FORCE_CDECL Str_CalcReqSizeW(const wchar_t* pstrFmt, ...);
 JOHN_DLL int FORCE_CDECL Str_CalcReqSizeVA(const char* pstrFmt, va_list ap);
 JOHN_DLL int FORCE_CDECL Str_CalcReqSizeVW(const wchar_t* pstrFmt, va_list ap);
 
-//Èç¹ûsrc==NULLµÄ»°£¬·µ»ØNULL
+//å¦‚æœsrc==NULLçš„è¯ï¼Œè¿”å›NULL
 JOHN_DLL char* FORCE_CDECL Str_DupPtrA(const char* src);
 JOHN_DLL wchar_t* FORCE_CDECL Str_DupPtrW(const wchar_t* src);
 
-// ´ÓsrcÈ¡n¸öµ½ĞÂ»º³åÇø
+// ä»srcå–nä¸ªåˆ°æ–°ç¼“å†²åŒº
 JOHN_DLL char* FORCE_CDECL Str_DupNPtrA(const char* src, size_t cch);
 JOHN_DLL wchar_t* FORCE_CDECL Str_DupNPtrW(const wchar_t* src, size_t cch);
 
-//×Ö·û´®Æ´½Ó
-//ÒªÇóËùÓĞ²ÎÊı¶¼ÊÇ×Ö·û´®
-// ±ØĞëÒÔNULL×÷Îª½áÊø·û£¬Óöµ½NULLÊ±£¬ÖÕÖ¹½âÊÍ¡£
+//å­—ç¬¦ä¸²æ‹¼æ¥
+//è¦æ±‚æ‰€æœ‰å‚æ•°éƒ½æ˜¯å­—ç¬¦ä¸²
+// å¿…é¡»ä»¥NULLä½œä¸ºç»“æŸç¬¦ï¼Œé‡åˆ°NULLæ—¶ï¼Œç»ˆæ­¢è§£é‡Šã€‚
 JOHN_DLL char* FORCE_CDECL Str_CatPtrA(const char* sFirst, ...);
 JOHN_DLL wchar_t* FORCE_CDECL Str_CatPtrW(const wchar_t* sFirst, ...);
 
-// bTailing Ä©Î²ÊÇ·ñÒª·Ö¸ô·û
-// delimiter ·Ö¸ô×Ö·û
-//ÒªÇóËùÓĞ²ÎÊı¶¼ÊÇ×Ö·û´®
-// ±ØĞëÒÔNULL×÷Îª½áÊø·û£¬Óöµ½NULLÊ±£¬ÖÕÖ¹½âÊÍ¡£
+char* FORCE_CDECL Str_CatPtrVA(const char* sFirst, va_list ap);
+wchar_t* FORCE_CDECL Str_CatPtrVW(const wchar_t* sFirst, va_list ap);
+
+// bTailing æœ«å°¾æ˜¯å¦è¦åˆ†éš”ç¬¦
+// delimiter åˆ†éš”å­—ç¬¦
+//è¦æ±‚æ‰€æœ‰å‚æ•°éƒ½æ˜¯å­—ç¬¦ä¸²
+// å¿…é¡»ä»¥NULLä½œä¸ºç»“æŸç¬¦ï¼Œé‡åˆ°NULLæ—¶ï¼Œç»ˆæ­¢è§£é‡Šã€‚
 // Str_JoinPtrA(false, ',', "hello", "Johnsing", "123", NULL) ---> hello,Johnsing,123
 JOHN_DLL char* FORCE_CDECL Str_JoinPtrA(bool bTailing/*=false*/, char delimiter, ...);
 JOHN_DLL wchar_t* FORCE_CDECL Str_JoinPtrW(bool bTailing/*=false*/, wchar_t delimiter, ...);
 
-// bCaseSence == true Çø·Ö´óĞ¡Ğ´
+// bCaseSence == true åŒºåˆ†å¤§å°å†™
 JOHN_DLL bool Str_StartWithA(const char* haystack, const char* needle, bool bCaseSence/*=true*/);
 JOHN_DLL bool Str_EndWithA(const char* sLong, const char* sSearch, bool bCaseSence);
 JOHN_DLL bool Str_StartWithW(const wchar_t* haystack, const wchar_t* needle, bool bCaseSence/*=true*/);
 JOHN_DLL bool Str_EndWithW(const wchar_t* sLong, const wchar_t* sSearch, bool bCaseSence);
 
+//å…è®¸æŒ‡å®šå§‹ä½ç½®
+JOHN_DLL const char* Str_strnstrA(const char* pstrSrc, const char* pstrSearch, int iSrcPos);
+JOHN_DLL const wchar_t* Str_strnstrW(const wchar_t* pstrSrc, const wchar_t* pstrSearch, int iSrcPos);
 
-//Ö§³Ö*£¬?Æ¥Åä
+JOHN_DLL const char* Str_stristrA(const char* str, const char* substr);
+JOHN_DLL const wchar_t* Str_stristrW(const wchar_t* str, const wchar_t* substr);
+
+//æ”¯æŒ*ï¼Œ?åŒ¹é…
+// return >0, åŒ¹é…ï¼› 0--ä¸åŒ¹é…
 // Str_WildCompareA("hello,Johnsing,123", "hello*123") --> true
 // Str_WildCompareA("hello,Johnsing,123", "hELLO*sing*3") --> false
 // Str_WildCompareA("hello,Johnsing,123", "*John*.png") --> false
@@ -198,7 +267,7 @@ JOHN_DLL bool Str_EndWithW(const wchar_t* sLong, const wchar_t* sSearch, bool bC
 JOHN_DLL int Str_WildCompareA(const char *pstrLong, const char *wild);
 JOHN_DLL int Str_WildCompareW(const wchar_t *pstrLong, const wchar_t *wild);
 
-//Ö»Ö§³Ö*¼òµ¥Æ¥Åä
+//åªæ”¯æŒ*ç®€å•åŒ¹é…
 // Str_SimpleMatchA("www.TEST.tom.COM", "www.*.com", false) -> true
 // Str_SimpleMatchA("A.B.C.D", "a.b.c.d", false)
 // Str_SimpleMatchA("127.0.0.0",  "12*.0.*1", false)
@@ -208,15 +277,15 @@ JOHN_DLL bool Str_SimpleMatchW(const wchar_t* pstrLong, const wchar_t* pattern, 
 JOHN_DLL bool Str_IsWhitespaceA(char ch);
 JOHN_DLL bool Str_IsWhitespaceW(wchar_t ch);
 
-// ÒÆ³ıÁ½¶Ë¿Õ¸ñ, \r\nµÈ¿Õ°××Ö·û
+// ç§»é™¤ä¸¤ç«¯ç©ºæ ¼, \r\nç­‰ç©ºç™½å­—ç¬¦
 JOHN_DLL bool Str_TrimInplaceA(char* lpString);
 JOHN_DLL bool Str_TrimInplaceW(wchar_t* lpString);
 
-// Ã»ÓĞÌæ»»µÄ»°£¬·µ»ØNULL, *pnReplace==0
+// æ²¡æœ‰æ›¿æ¢çš„è¯ï¼Œè¿”å›NULL, *pnReplace==0
 JOHN_DLL char* Str_ReplacePtrA(const char* pstrBuf, const char* pstrFind, const char* pstrReplace, int* pnReplace/*=NULL*/);
 JOHN_DLL wchar_t* Str_ReplacePtrW(const wchar_t* pstrBuf, const wchar_t* pstrFind, const wchar_t* pstrReplace, int* pnReplace/*=NULL*/);
 
-// Ìø¹ı
+// è·³è¿‡
 JOHN_DLL void Str_SkipSpaceA(const char** ppch);
 JOHN_DLL void Str_SkipSpaceW(const wchar_t** ppch);
 JOHN_DLL void Str_SkipNonspaceA(const char** ppch);
@@ -230,34 +299,38 @@ JOHN_DLL void Str_SkipOverW(const wchar_t** pp, const wchar_t* pdelim);
 JOHN_DLL bool Str_SkipPrefixA(const char* prefix, const char** pstr);
 JOHN_DLL bool Str_SkipPrefixW(const wchar_t* prefix, const wchar_t** pstr);
 
-//ÒÆ³ıÓÒ²àÌØ¶¨×Ö·û
+//ç§»é™¤å³ä¾§ç‰¹å®šå­—ç¬¦
 JOHN_DLL void Str_TrimRightA(char* pszBuf, const char* pfilt);
 JOHN_DLL void Str_TrimRightW(wchar_t* pszBuf, const wchar_t* pfilt);
 
+//é€†å‘å­—ç¬¦ä¸²
+bool Str_ReverseW(wchar_t* pstr, size_t cchstr);
+bool Str_ReverseA(char* pstr, size_t cchstr);
 
-//Ìøµ½ÏÂÒ»ĞĞ¡££¨»áÆÆ»µÔ­ÓĞÊı¾İ£©
+
+//è·³åˆ°ä¸‹ä¸€è¡Œã€‚ï¼ˆä¼šç ´ååŸæœ‰æ•°æ®ï¼‰
 //char* pCurLine = szBuf;
 //char* p = szBuf;
-//nRet = Str_StripNextLine(&p);  //0»¹ÓĞÏÂÒ»ĞĞ£¬1ÒÑ¾­ÊÇ×îºóÒ»ĞĞÁË
+//nRet = Str_StripNextLine(&p);  //0è¿˜æœ‰ä¸‹ä¸€è¡Œï¼Œ1å·²ç»æ˜¯æœ€åä¸€è¡Œäº†
 JOHN_DLL int Str_StripNextLine(char** pp);
 
-// ·ÖĞĞ·ûµÄ¸öÊı
+// åˆ†è¡Œç¬¦çš„ä¸ªæ•°
 JOHN_DLL size_t Str_CountLines(const char* pstr);
 
-//ÒÆ³ıÎÄ±¾ÖĞµÄCRLF
-//·µ»ØÒÆ³ıºóµÄ×Ü×Ö·ûÊı
+//ç§»é™¤æ–‡æœ¬ä¸­çš„CRLF
+//è¿”å›ç§»é™¤åçš„æ€»å­—ç¬¦æ•°
 JOHN_DLL int Str_StripCRLFA(char *s);
 JOHN_DLL int Str_StripCRLFW(wchar_t *s);
 
 
-//ÔÚ×Ö·û´®Ç°Ãæ¼Ó0,Ò»°ãÊÇÊı×Ö×Ö·û´®
-//Èç¹ûnExpLen <= strlen(pstrIn), Ö±½ÓÊä³öpstrIn
+//åœ¨å­—ç¬¦ä¸²å‰é¢åŠ 0,ä¸€èˆ¬æ˜¯æ•°å­—å­—ç¬¦ä¸²
+//å¦‚æœnExpLen <= strlen(pstrIn), ç›´æ¥è¾“å‡ºpstrIn
 JOHN_DLL void Str_ZeroPrefix(char* pstrOut, int cchOut, const char* pstrIn, int nExpLen);
-//pstrOutµÄ´óĞ¡ÖÁÉÙÓ¦¸ÃÊÇnTarSize+1
+//pstrOutçš„å¤§å°è‡³å°‘åº”è¯¥æ˜¯nTarSize+1
 JOHN_DLL void Str_EndPadding(char* pstrOut, size_t nTarSize, char ch);
 
 // search for an occurrence of string pstrSearch in string pstrLong
-// ·µ»ØµÄÊÇËùÔÚÎ»ÖÃ
+// è¿”å›çš„æ˜¯æ‰€åœ¨ä½ç½®
 //pPos = Str_FindOneOfA("#12356#789#000,ABC,DEF", "#,");
 ////  pPos == strchr(pstrLong, '#');
 JOHN_DLL const char* Str_FindOneOfA(const char* pstrLong,	const char* pstrSearch);
@@ -279,13 +352,22 @@ JOHN_DLL SList* Str_TokenW(const wchar_t* input, const wchar_t* delimitor, bool 
 
 //  argv = Str_ToArgvPtr("-q --refresh", &argc);
 //  argc==3
-//  argv[0]ÓÀÔ¶¶¼ÊÇ¿Õ
+//  argv[0]æ°¸è¿œéƒ½æ˜¯ç©º
 //  Mem_free(argv);
 JOHN_DLL char** Str_ToArgvPtr(const char* arg, int* pSize);
 
 // is ch in str?
 JOHN_DLL bool Str_IsInSetA(char ch, const char* str);
 JOHN_DLL bool Str_IsInSetW(wchar_t ch, const wchar_t* str);
+
+//ç®€å•å­—ç¬¦ä¸²è½¬ä¹‰ï¼Œæ¯”å¦‚ï¼šCå­—ç¬¦ä¸²è½¬ä¹‰
+//æ›´å¤æ‚çš„ï¼Œä½¿ç”¨ Str_EscapeStringPtr
+JOHN_DLL size_t Str_Escape(char* buffer, size_t buflen,
+				const char* source, size_t srclen,
+				const char* illegal, char escape);
+JOHN_DLL size_t Str_Unescape(char* buffer, size_t buflen,
+					const char* source, size_t srclen,
+					char escape);
 
 // MultiSZ
 /*-------------------------------+
@@ -300,13 +382,13 @@ JOHN_DLL wchar_t* Str_MultiSZ_FromListPtrW(const SList* pList);
 JOHN_DLL SList* Str_MultiSZ_ToListA(const char* ppstrmz);
 JOHN_DLL SList* Str_MultiSZ_ToListW(const wchar_t* ppstrmz);
 
-//²»·Ö´óĞ¡Ğ´²éÕÒ
+//ä¸åˆ†å¤§å°å†™æŸ¥æ‰¾
 // 0 -- not found
 // >0 -- pos+1
 JOHN_DLL DWORD Str_MultiSz_FindA(const char* ppstrmz, const char* pszToFind);
 JOHN_DLL DWORD Str_MultiSz_FindW(const wchar_t* ppstrmz, const wchar_t* pszToFind);
 
-//ÕâËÄ¸öº¯ÊıÆäÊµ¶¼²»¸ü¸ÄÄÚÈİµÄ
+//è¿™å››ä¸ªå‡½æ•°å…¶å®éƒ½ä¸æ›´æ”¹å†…å®¹çš„
 JOHN_DLL char* Str_ForwardScanA(char* lpSource, char* lpSearch, bool fCaseSensitive);
 JOHN_DLL wchar_t* Str_ForwardScanW(wchar_t* lpSource, wchar_t* lpSearch, bool fCaseSensitive);
 
@@ -323,8 +405,8 @@ JOHN_DLL wchar_t* Str_ReverseScanW(
 	wchar_t* lpSearch,
 	bool fCaseSensitive);
 
-//ÕÒ²»µ½·µ»Ø-1
-//×¢ÒâÒ»¸öwchar_t = 2bytes
+//æ‰¾ä¸åˆ°è¿”å›-1
+//æ³¨æ„ä¸€ä¸ªwchar_t = 2bytes
 JOHN_DLL int Str_KMPMatcher(
 	const BYTE* pData, const uint32_t cchData,
 	const BYTE* pSearch, const uint32_t cchSearch,
@@ -338,44 +420,48 @@ JOHN_DLL int Str_KMPMatcher(
 *+--------+-------+-------+------+
 */
 JOHN_DLL PtrList PtrList_Add(PtrList other/*=NULL*/, void* pObj);
-//Ö»ÊÍ·ÅÈİÆ÷£¬×ÓÔªËØµÄÊÍ·Å²»ÊÇÎÒµÄÔğÈÎ
+//åªé‡Šæ”¾å®¹å™¨ï¼Œå­å…ƒç´ çš„é‡Šæ”¾ä¸æ˜¯æˆ‘çš„è´£ä»»
 JOHN_DLL void PtrList_Free(PtrList ppList);
 
 JOHN_DLL int PtrList_Count(PtrList ppList);
 JOHN_DLL void* PtrList_GetField(PtrList ppList, uint32_t iField);
-//Ç³¸´ÖÆ
+//æµ…å¤åˆ¶
 JOHN_DLL PtrList PtrList_Duplicate(PtrList ppList);
-//Á½±ßÎª¿ÕµÄ»°£¬·µ»ØNULL
+//ä¸¤è¾¹ä¸ºç©ºçš„è¯ï¼Œè¿”å›NULL
 JOHN_DLL PtrList PtrList_Merge(PtrList papszOrig, PtrList papszOverride);
 
 typedef void PfnPtrListWalk(void* pitem, void* pExtra);
 JOHN_DLL void PtrList_Walk(PtrList ppList, PfnPtrListWalk pfn, void* pExtra/*=NULL*/);
 
 
-// ¼òµ¥µÄ¶¯Ì¬»º³åÇø
+// ç®€å•çš„åŠ¨æ€ç¼“å†²åŒº
 JOHN_DLL Johnbuf* Johnbuf_new();
 JOHN_DLL void Johnbuf_free(Johnbuf* hBuf);
-//ÖØÖÃÄÚ²¿Ö¸Õë£¬ÖØÓÃÄÚ´æ
+//é‡ç½®å†…éƒ¨æŒ‡é’ˆï¼Œé‡ç”¨å†…å­˜
 JOHN_DLL void Johnbuf_reset(Johnbuf* pBuf);
-//·ÃÎÊÄÚ²¿Ö¸Õë
+//è®¿é—®å†…éƒ¨æŒ‡é’ˆ
 JOHN_DLL BYTE* Johnbuf_value(const Johnbuf* pBuf);
-//Ê¹ÓÃÁË¶àÉÙ×Ö½Ú
+//ä½¿ç”¨äº†å¤šå°‘å­—èŠ‚
 JOHN_DLL size_t Johnbuf_length(const Johnbuf* pBuf);
 
 /* Steal the value and close the strbuffer */
-/* Ö±½ÓÇÔÈ¡×Ö·û´®»º³åÇø£¬Ô­¶ÔÏó±äµÃÎŞĞ§ 
-*  Ö¸ÕëĞèÒªÊ¹ÓÃMem_free()ÊÍ·Å
+/* ç›´æ¥çªƒå–å­—ç¬¦ä¸²ç¼“å†²åŒºï¼ŒåŸå¯¹è±¡å˜å¾—æ— æ•ˆ 
+*  æŒ‡é’ˆéœ€è¦ä½¿ç”¨Mem_free()é‡Šæ”¾
 */
 JOHN_DLL BYTE* Johnbuf_steal_value(Johnbuf* pBuf);
 
-//·ÅÈëÎÄ±¾£¬²»°üº¬NULL
-//cchStr==0µÄ»°£¬×Ô¶¯Í³¼Æ
-//·µ»Ø¸ºÊı±íÊ¾Ê§°Ü
+//æ”¾å…¥æ–‡æœ¬ï¼Œä¸åŒ…å«NULL
+//cchStr<=0çš„è¯ï¼Œè‡ªåŠ¨ç»Ÿè®¡
+//è¿”å›è´Ÿæ•°è¡¨ç¤ºå¤±è´¥
 JOHN_DLL int Johnbuf_appendA(Johnbuf* pBuf, const char* pstr, int cchStr/*=0*/);
 JOHN_DLL int Johnbuf_appendW(Johnbuf* pBuf, const wchar_t* pstr, int cchStr/*=0*/);
 
 JOHN_DLL int Johnbuf_append_byte(Johnbuf* pBuf, char by);
 JOHN_DLL int Johnbuf_append_bytes(Johnbuf* pBuf, const BYTE* data, size_t size);
+
+//æ ‡è®°æœ‰æ•ˆæ•°æ®çš„å¤§å°ä¸ºnewDataLen
+// <0å¤±è´¥
+JOHN_DLL int Johnbuf_set_validlength(Johnbuf* pBuf, size_t newDataLen);
 
 /**
  * Set len bytes of the buffer to charvalue, starting at offset offset.
@@ -388,18 +474,28 @@ JOHN_DLL int Johnbuf_append_bytes(Johnbuf* pBuf, const BYTE* data, size_t size);
 JOHN_DLL int Johnbuf_memset(Johnbuf* pBuf, int offset, int chVal, int len);
 JOHN_DLL int FORCE_CDECL Johnbuf_sprintf(Johnbuf* pBuf, const char* msg, ...);
 
-//µ¯³ö×îºóÒ»¸ö×Ö·û
+//å¼¹å‡ºæœ€åä¸€ä¸ªå­—ç¬¦
 JOHN_DLL char Johnbuf_pop(Johnbuf* pBuf);
 
-// ×Ö½Ú²Ù×÷
+// å­—èŠ‚æ“ä½œ
 JOHN_DLL bool Byte_Equal(const void* s1, const void* s2, size_t n);
-//ÕâÀïÃ»ÓĞ¶Ôsrc½øĞĞ¶àÖØÑ­»·ÒÔÌî³ädest
-JOHN_DLL void Byte_Xor(void* dest, const void* src, size_t nSrc);
+
+JOHN_DLL void Byte_Xor(char *to, int to_len, const char *pattern, int pattern_len);
+//ä¸€èˆ¬ä¼šæ¯”Byte_Xorå¿«
+JOHN_DLL void Byte_XorFast(BYTE *to, int cbTo, const BYTE *pattern, int cbPattern);
+
+//ä¸ä¸Šä¸¤ä¸ªåŠŸèƒ½ä¸€æ ·ï¼Œä½†è¦æ±‚maskçš„é•¿åº¦ä¸bufä¸€è‡´
+JOHN_DLL void Byte_Xorbuf(BYTE *buf, const BYTE *mask, size_t cbBuf);
+JOHN_DLL void Byte_XorOutbuf(BYTE *output, const BYTE *input, const BYTE *mask, size_t cbOutput);
+
+//ç®€å•ç¼“å†²åŒºåŠ å¯†ï¼Œä¸å˜é•¿
+JOHN_DLL void Byte_EncryptMy(BYTE* lpbBuf, size_t iLen);
+JOHN_DLL void Byte_DecryptMy(BYTE* lpbBuf, size_t iLen);
 
 JOHN_DLL void Byte_RevorderInplace(BYTE* data, int size);
 JOHN_DLL void Byte_RevorderTo(const BYTE *src, BYTE *dst, size_t size);
 
-//´ÕºÏÓÃ
+//å‡‘åˆç”¨
 // 0x11223344 ---> 0x44332211
 JOHN_DLL uint32_t Byte_Swap32(uint32_t x);
 // 0x11223344 ---> 0x33441122
@@ -409,7 +505,7 @@ JOHN_DLL uint16_t Byte_Swap16(uint16_t x);
 // 0x1122334455667788 ---> 0x8877665544332211
 JOHN_DLL uint64_t Byte_Swap64(const uint64_t* pval);
 
-//·µ»Ø1bitµÄÊıÁ¿
+//è¿”å›1bitçš„æ•°é‡
 // 7 ---> 3
 JOHN_DLL size_t Byte_BitCount32(uint32_t bits);
 JOHN_DLL size_t Byte_BitCount64(uint64_t bits);
@@ -417,8 +513,11 @@ JOHN_DLL size_t Byte_BitCount64(uint64_t bits);
 // 0b00010001 --> 0b10001000
 JOHN_DLL BYTE Byte_BitRev(BYTE n);
 
-//ÆæÅ¼×Ö½Ú½»»»
-//¼òµ¥ÊµÏÖ£¬Ğ§ÂÊºÜ²î
+JOHN_DLL uint32_t Num_ReverseBits(uint32_t key);
+JOHN_DLL uint32_t Num_ClearHighestBit(uint32_t v);
+
+//å¥‡å¶å­—èŠ‚äº¤æ¢
+//ç®€å•å®ç°ï¼Œæ•ˆç‡å¾ˆå·®
 // 0x12345678 --> 0x34127856
 // 0x1122334455667788 ---> 0x2211443366558877
 JOHN_DLL void Byte_Swap(
@@ -430,32 +529,39 @@ JOHN_DLL void Byte_Swap(
 //0x00000011 ---> 0x88000000
 JOHN_DLL uint32_t Byte_Flip32(uint32_t x);
 
-//²úÉúËæ»úÊı
+//returns true if 'x' is a subset of 'y'.
+inline bool Num_IsSubset(uint64_t x, uint64_t y) { return (x & y) == x; }
+
+//returns true if 'x' and 'y' share at least one bit.
+inline bool Num_Overlaps(uint64_t x, uint64_t y) { return (x & y) != 0; }
+
+
+//äº§ç”Ÿéšæœºæ•°
 JOHN_DLL bool Byte_RandomBytes(uint32_t len, BYTE *buf);
 JOHN_DLL int32_t Byte_RandomInt32();
 JOHN_DLL uint32_t Byte_RandomUint32();
 JOHN_DLL uint32_t Byte_RandomUint32NonZero();
 JOHN_DLL uint64_t Byte_RandomUint64();
 JOHN_DLL double Byte_RandomDouble();
-//»á×Ô¶¯Ìí¼ÓNULL£¬cchBuf°üº¬ÁËNULL
+//ä¼šè‡ªåŠ¨æ·»åŠ NULLï¼ŒcchBufåŒ…å«äº†NULL
 JOHN_DLL bool Byte_RandomStr(size_t cchBuf, char* buf);
 JOHN_DLL char* Byte_RandomStrPtr(size_t n);
 
-//²úÉúËæ»úÊı[min, max]
+//äº§ç”Ÿéšæœºæ•°[min, max]
 JOHN_DLL int32_t Byte_RandomInt32Range(int32_t min, int32_t max);
 // [min, max)
 JOHN_DLL double Byte_RandomDoubleRange(double min, double max);
 
-//ÓëStr_EndPaddingÀàËÆ, ·µ»ØÌî³äµÄ¸öÊı£¬<0Ê§°Ü¡£
-//Èç¹ûnOutCurSize<nTarSizeµÄ»°£¬ÍùpstrOutµÄÄ©Î²Ìî³äch.
-//Èç¹ûnOutCurSize>=nTarSize, ÎŞ¶¯×÷¡£
+//ä¸Str_EndPaddingç±»ä¼¼, è¿”å›å¡«å……çš„ä¸ªæ•°ï¼Œ<0å¤±è´¥ã€‚
+//å¦‚æœnOutCurSize<nTarSizeçš„è¯ï¼Œå¾€pstrOutçš„æœ«å°¾å¡«å……ch.
+//å¦‚æœnOutCurSize>=nTarSize, æ— åŠ¨ä½œã€‚
 JOHN_DLL int Byte_EndPadding(BYTE* pstrOut, size_t nOutCurSize, size_t nTarSize, BYTE ch/*=NULL*/);
 
-//16¸ö×Ö½Ú
+//16ä¸ªå­—èŠ‚
 JOHN_DLL bool Byte_GenUUID(uint8_t* uuid_data);
 
-//bHasSpilt==false, cchBufÖÁÉÙÒªÓĞ32+1¸ö×Ö·û "6609F82E963F4C8DBE8FA0F40E2C9656"
-//bHasSpilt==true, cchBufÖÁÉÙÒªÓĞ36+1¸ö×Ö·û. "E5723717-133F-42D2-B81A-C64E22E2F111"
+//bHasSpilt==false, cchBufè‡³å°‘è¦æœ‰32+1ä¸ªå­—ç¬¦ "6609F82E963F4C8DBE8FA0F40E2C9656"
+//bHasSpilt==true, cchBufè‡³å°‘è¦æœ‰36+1ä¸ªå­—ç¬¦. "E5723717-133F-42D2-B81A-C64E22E2F111"
 JOHN_DLL bool Str_GenUUID(char* buffer, size_t cchBuf, bool bHasSpilt/*=false*/);
 
 // 1024             ---> "1KB"
@@ -466,26 +572,26 @@ JOHN_DLL void Str_FormatBytes(char* lpOutput, int cchOutput, uint64_t dwBytes);
 
 //1KB ---> 1024
 //5.0 MB --> 5242880
-// ÒªÇóµ¥Î»´óĞ´´øB, Ö§³Öµ¥Î»£ºKB,MB,GB
+// è¦æ±‚å•ä½å¤§å†™å¸¦B, æ”¯æŒå•ä½ï¼šKB,MB,GB
 JOHN_DLL uint64_t Str_ParseBytes(const char *astring);
 
-//²»ĞèÒª´øB, ²»Ö§³ÖĞ¡Êı£¬²»Çø·Ö´óĞ¡Ğ´
-//Ö§³Öµ¥Î»£ºKB, MB, GB
+//ä¸éœ€è¦å¸¦B, ä¸æ”¯æŒå°æ•°ï¼Œä¸åŒºåˆ†å¤§å°å†™
+//æ”¯æŒå•ä½ï¼šKB, MB, GB
 //sample: 5MB, 5 M, 7g
 JOHN_DLL uint64_t Str_ParseBytesCase(const char *bs);
 
 typedef enum _eEscapeType {
-	/*°Ñ×Ö·û´®×ª»»³ÉÊÊºÏÓÃ×÷C×Ö·û´®µÄĞÎÊ½¡£×ª»»µôslash,quote,»»ĞĞ·ûµÈ, ²»ÔÊĞíĞĞÖĞÓĞ\0*/
+	/*æŠŠå­—ç¬¦ä¸²è½¬æ¢æˆé€‚åˆç”¨ä½œCå­—ç¬¦ä¸²çš„å½¢å¼ã€‚è½¬æ¢æ‰slash,quote,æ¢è¡Œç¬¦ç­‰, ä¸å…è®¸è¡Œä¸­æœ‰\0*/
 	ET_BackslashQuotable=0, 
-	/*°Ñ×Ö·û´®×ª»»³ÉÊÊºÏ·ÅÈëXML CDATAµÄĞÎÊ½¡£×ª»»µô<,>,",&µÈ, ²»ÔÊĞíĞĞÖĞÓĞ\0*/
+	/*æŠŠå­—ç¬¦ä¸²è½¬æ¢æˆé€‚åˆæ”¾å…¥XML CDATAçš„å½¢å¼ã€‚è½¬æ¢æ‰<,>,",&ç­‰, ä¸å…è®¸è¡Œä¸­æœ‰\0*/
 	ET_XML=1,
-	/*°Ñ×Ö·û´®×ª»»³ÉÊÊºÏ·ÅÔÚURL´«ËÍµÄĞÎÊ½¡£×ª»»µô:,/,&,?µÈ£¬RFC1738*/
+	/*æŠŠå­—ç¬¦ä¸²è½¬æ¢æˆé€‚åˆæ”¾åœ¨URLä¼ é€çš„å½¢å¼ã€‚è½¬æ¢æ‰:,/,&,?ç­‰ï¼ŒRFC1738*/
 	ET_URL=2,
-	/*°Ñ×Ö·û´®×ª»»³ÉÊÊºÏ·ÅÔÚSQLÓï¾äÖĞµÄĞÎÊ½¡£Ò»¸öµ¥ÒıºÅ±äÁ½¸ö*/
+	/*æŠŠå­—ç¬¦ä¸²è½¬æ¢æˆé€‚åˆæ”¾åœ¨SQLè¯­å¥ä¸­çš„å½¢å¼ã€‚ä¸€ä¸ªå•å¼•å·å˜ä¸¤ä¸ª*/
 	ET_SQL=3,
-	/*CSV×ªÒå£¬Ò»¸öË«ÒıºÅ£¬±äÁ½¸ö*/
+	/*CSVè½¬ä¹‰ï¼Œä¸€ä¸ªåŒå¼•å·ï¼Œå˜ä¸¤ä¸ª*/
 	ET_CSV=4,
-	/*XML(preserves quotes, ²»×ªÒåË«ÒıºÅ³É&quotes;)*/
+	/*XML(preserves quotes, ä¸è½¬ä¹‰åŒå¼•å·æˆ&quotes;)*/
 	ET_XML_BUT_QUOTES=5,
 	/*CSV (forced quoting)*/
 	ET_CSV_FORCE_QUOTING=6,
@@ -494,18 +600,45 @@ typedef enum _eEscapeType {
 }EEscapeType;
 
 JOHN_DLL char *Str_EscapeStringPtr(const char *pszInput, int nLength, EEscapeType nScheme);
-// ET_CSV ºÍ ET_CSV_FORCE_QUOTING ½âÊÍÎ´ÊµÏÖ
+// ET_CSV å’Œ ET_CSV_FORCE_QUOTING è§£é‡Šæœªå®ç°
 JOHN_DLL char *Str_UnescapeStringPtr(const char *pszInput, int *pnLength, EEscapeType nScheme);
 
+
+// ç®€å•çš„å­—ç¬¦ä¸²ç¼“å†²åŒº
+// bWideStr==true, for wchar_t*
+// bWideStr==false, for mbcs, utf-8
+JOHN_DLL Strbuf* Strbuf_new(bool bWideStr);
+JOHN_DLL void Strbuf_free(Strbuf* hBuf);
+
+// å†…éƒ¨å•ä¸ªå…ƒç´ çš„å¤§å°
+// wchar_t -- 2
+// other   -- 1
+JOHN_DLL size_t Strbuf_TypeSize(const Strbuf* pobj);
+
+//è®¿é—®å†…éƒ¨æŒ‡é’ˆ
+JOHN_DLL void* Strbuf_value(const Strbuf* pBuf);
+//return the cch, not including the last NULL
+//æœ‰å¤šå°‘ä¸ªå­—ç¬¦
+JOHN_DLL size_t Strbuf_length(const Strbuf* pBuf);
+
+//æ”¾å…¥æ–‡æœ¬ï¼Œä¸åŒ…å«NULL
+//cchStr<=0çš„è¯ï¼Œè‡ªåŠ¨ç»Ÿè®¡
+//è¿”å›è´Ÿæ•°è¡¨ç¤ºå¤±è´¥
+JOHN_DLL int Strbuf_appendA(Strbuf* pBuf, const char* pstr, int cchStr/*=0*/);
+JOHN_DLL int Strbuf_appendW(Strbuf* pBuf, const wchar_t* pstr, int cchStr/*=0*/);
+
+//æ ‡è®°æœ‰æ•ˆæ•°æ®çš„å¤§å°ä¸ºcchNewLen
+// <0å¤±è´¥
+JOHN_DLL int Strbuf_set_validlength(Strbuf* pBuf, size_t cchNewLen);
 
 
 //Locale
 //zh-CN
-//localeType ÊÇ LOCALE_*¿ªÍ·µÄ³£Á¿
+//localeType æ˜¯ LOCALE_*å¼€å¤´çš„å¸¸é‡
 JOHN_DLL wchar_t* Str_LocaleInfoPtr(LCTYPE localeType);
 JOHN_DLL const wchar_t* Str_LangDefault();
 
-// LANG_*¿ªÍ·µÄ³£Á¿
+// LANG_*å¼€å¤´çš„å¸¸é‡
 JOHN_DLL void OS_GetDefaultLangID(LANGID* psysLang, LANGID* puserLang);
 
 //CPxxx
@@ -517,6 +650,11 @@ bool Str_IsDBCSCodePage(int codePage);
 bool Str_IsDBCSLeadByte(int dbcsCodePage, char ch);
 
 // mbcs OEM char* <----> wchar_t*
+JOHN_DLL bool Str_MbcsToUnicode(const char* pszStr, int cchStr/*=-1*/, UINT cp/*=CP_ACP*/, 
+								wchar_t* poWstr, int cchWstr);
+JOHN_DLL bool Str_UnicodeToMbcs(const wchar_t* pszSrc, int cchSrc/*=-1*/, UINT cp/*=CP_ACP*/,
+								char* poStr, int cchStr);
+
 JOHN_DLL wchar_t* Str_MbcsToUnicodePtr(const char* szStr, UINT cp/*=CP_ACP*/);
 JOHN_DLL char* Str_UnicodeToMbcsPtr(const wchar_t* szStr, UINT cp/*=CP_ACP*/);
 
@@ -526,28 +664,28 @@ JOHN_DLL char* Str_UnicodeToUtf8Ptr(const wchar_t* UnicodeStr);
 JOHN_DLL char* Str_MbcsToUtf8Ptr(const char* strSource, UINT cp/* = CP_ACP*/);
 JOHN_DLL char* Str_Utf8ToMbcsPtr(const char* strSource, UINT cp/* = CP_ACP*/);
 
-// nSrcÊÇ×Ö½ÚÊı
+// nSrcæ˜¯å­—èŠ‚æ•°
 JOHN_DLL wchar_t* Str_MbcsToUnicodeNPtr(const BYTE* bySrc, size_t nSrc, UINT cp/*=CP_ACP*/);
 JOHN_DLL wchar_t* Str_Utf8ToUnicodeNPtr(const BYTE* bySrc, size_t nSrc);
 
-//Ïàµ±ÓÚcode page×ª»»
+//ç›¸å½“äºcode pageè½¬æ¢
 //GBK             936
 //GB18030         54936
 //BIG5            950
 //char* pstrUn = Str_RecodePtr(pstr, 950, CP_ACP);
 JOHN_DLL char* Str_RecodePtr(const char* src, UINT src_cp, UINT dst_cp);
 
-//UTF8×Ö·û¸öÊı
-//Ïà¶Ô¶øÑÔ£¬strlen·µ»ØµÄÊÇ×Ö½ÚÊı
+//UTF8å­—ç¬¦ä¸ªæ•°
+//ç›¸å¯¹è€Œè¨€ï¼Œstrlenè¿”å›çš„æ˜¯å­—èŠ‚æ•°
 JOHN_DLL int Str_Utf8Len(const char *pszUTF8Str);
 
 //bool bIsValid = Str_IsLegalUTF8Sequence((BYTE*)pstr, (BYTE*)pstr+strlen(pstr));
 JOHN_DLL bool Str_IsLegalUTF8Sequence(const uint8_t* source, const uint8_t* sourceEnd);
-// lengthµÄÈ¡Öµ£º 1~4
+// lengthçš„å–å€¼ï¼š 1~4
 JOHN_DLL bool Str_IsLegalUTF8(const uint8_t *source, int length);
 
 
-// ÖìéF»ùÖ»ÔÚGBK£¬²»ÔÚGB2312
+// æœ±é••åŸºåªåœ¨GBKï¼Œä¸åœ¨GB2312
 JOHN_DLL bool Str_IsLegalGB2312(const void* stream, unsigned length);
 JOHN_DLL bool Str_IsLegalGBK(const void* stream, unsigned length);
 JOHN_DLL bool Str_IsLegalBIG5(const void* stream, unsigned length);
@@ -566,7 +704,7 @@ typedef enum {
 } ConversionFlags;
 
 // UTF8 <---> UTF16
-//ËÆºõ¶ÔUTF16 BEÖ§³ÖµÃ²»ºÃ
+//ä¼¼ä¹å¯¹UTF16 BEæ”¯æŒå¾—ä¸å¥½
 JOHN_DLL
 ConversionResult Str_UTF16toUTF8(
 	const uint16_t** sourceStart, const uint16_t* sourceEnd,
@@ -578,43 +716,61 @@ ConversionResult Str_UTF8toUTF16(
 	uint16_t** targetStart, uint16_t* targetEnd, ConversionFlags flags);
 
 
-// Êı×ÖÓë×Ö·û´®»¥×ª, ²»ĞèÒªÊÍ·Å×Ö·û´®ÄÚ´æ
-JOHN_DLL const char* Num_StrInt16(int16_t val);
-JOHN_DLL const char* Num_StrUInt16(uint16_t val);
-JOHN_DLL const char* Num_StrInt32(int32_t val);
-JOHN_DLL const char* Num_StrUInt32(uint32_t val);
-JOHN_DLL const char* Num_StrInt64(int64_t val);
-JOHN_DLL const char* Num_StrUInt64(uint64_t val);
+// æ•°å­—ä¸å­—ç¬¦ä¸²äº’è½¬, ä¸éœ€è¦é‡Šæ”¾å­—ç¬¦ä¸²å†…å­˜
+JOHN_DLL const char*    Num_StrInt16A(int16_t val);
+JOHN_DLL const wchar_t* Num_StrInt16W(int16_t val);
+JOHN_DLL const char*    Num_StrUInt16A(uint16_t val);
+JOHN_DLL const wchar_t* Num_StrUInt16W(uint16_t val);
+JOHN_DLL const char*    Num_StrInt32A(int32_t val);
+JOHN_DLL const wchar_t* Num_StrInt32W(int32_t val);
+JOHN_DLL const char*    Num_StrUInt32A(uint32_t val);
+JOHN_DLL const wchar_t* Num_StrUInt32W(uint32_t val);
+JOHN_DLL const char*    Num_StrInt64A(int64_t val);
+JOHN_DLL const wchar_t* Num_StrInt64W(int64_t val);
+JOHN_DLL const char*    Num_StrUInt64A(uint64_t val);
+JOHN_DLL const wchar_t* Num_StrUInt64W(uint64_t val);
 
-//×î¶à±£Áô4Î»Ğ¡Êı
+//æœ€å¤šä¿ç•™4ä½å°æ•°
 //340282346638528859811704183484516925440.0000
-JOHN_DLL const char* Num_StrFloat(float val);
+JOHN_DLL const char*    Num_StrFloatA(float val);
+JOHN_DLL const wchar_t* Num_StrFloatW(float val);
 
-//×î¶à±£Áô6Î»Ğ¡Êı, Mem_freeÊÍ·ÅÄÚ´æ
+//æœ€å¤šä¿ç•™6ä½å°æ•°, Mem_freeé‡Šæ”¾å†…å­˜
 //179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368.000000
-JOHN_DLL char* Num_StrDoublePtr(double val);
+JOHN_DLL char*    Num_StrDoublePtrA(double val);
+JOHN_DLL wchar_t* Num_StrDoublePtrW(double val);
 
-//×î¶à±£Áô16Î»Ğ¡Êı, Mem_freeÊÍ·ÅÄÚ´æ
+//æœ€å¤šä¿ç•™16ä½å°æ•°, Mem_freeé‡Šæ”¾å†…å­˜
 //2.225073858507201e-308
-JOHN_DLL char* Num_StrLongDoublePtr(const long double* pval);
+JOHN_DLL char*    Num_StrLongDoublePtrA(const long double* pval);
+JOHN_DLL wchar_t* Num_StrLongDoublePtrW(const long double* pval);
 
 // 0xXXXXXXXX
-JOHN_DLL const char* Num_StrAddress(const void* pval);
+JOHN_DLL const char*    Num_StrAddressA(const void* pval);
+JOHN_DLL const wchar_t* Num_StrAddressW(const void* pval);
+
 // "true"
 // "false"
-JOHN_DLL const char* Num_StrBool(bool val);
+JOHN_DLL const char*    Num_StrBoolA(bool val);
+JOHN_DLL const wchar_t* Num_StrBoolW(bool val);
 
-JOHN_DLL int32_t Str_Int32(const char* pstr);
-JOHN_DLL int64_t Str_Int64(const char* pstr);
+JOHN_DLL int32_t Str_Int32A(const char* pstr);
+JOHN_DLL int32_t Str_Int32W(const wchar_t* pstr);
+JOHN_DLL int64_t Str_Int64A(const char* pstr);
+JOHN_DLL int64_t Str_Int64W(const wchar_t* pstr);
 
-//Ö§³ÖÊ®½øÖÆ×Ö·û´®£¬Ò²Ö§³Ö0x12345678Ê®Áù½øÖÆ×Ö·û´®
-JOHN_DLL uint32_t Str_UInt32(const char* pstr);
-JOHN_DLL uint64_t Str_UInt64(const char* pstr);
+//æ”¯æŒåè¿›åˆ¶å­—ç¬¦ä¸²ï¼Œä¹Ÿæ”¯æŒ0x12345678åå…­è¿›åˆ¶å­—ç¬¦ä¸²
+JOHN_DLL uint32_t Str_UInt32A(const char* pstr);
+JOHN_DLL uint32_t Str_UInt32W(const wchar_t* pstr);
+JOHN_DLL uint64_t Str_UInt64A(const char* pstr);
+JOHN_DLL uint64_t Str_UInt64W(const wchar_t* pstr);
 
-JOHN_DLL float Str_Float(const char* pstr);
-JOHN_DLL double Str_Double(const char* pstr);
+JOHN_DLL float Str_FloatA(const char* pstr);
+JOHN_DLL float Str_FloatW(const wchar_t* pstr);
+JOHN_DLL double Str_DoubleA(const char* pstr);
+JOHN_DLL double Str_DoubleW(const wchar_t* pstr);
 
-// ¼òµ¥ÊµÏÖµÄ
+// ç®€å•å®ç°çš„
 // "5A" ---> 90
 // "ffff" ---> 65535
 JOHN_DLL uint64_t Str_hex2llA(const char *buf);
@@ -622,12 +778,12 @@ JOHN_DLL uint64_t Str_hex2llW(const wchar_t *buf);
 
 // "true", "TRUE", "yes" ---> true
 // other ---> false
-JOHN_DLL bool Str_Bool(const char* pstr);
-
+JOHN_DLL bool Str_BoolA(const char* pstr);
+JOHN_DLL bool Str_BoolW(const wchar_t* pstr);
 
 //////////////////////////////////////////////
 
-//¼ÆËãCRC32
+//è®¡ç®—CRC32
 /*
    Usage example:
 	 uLong crc = Byte_Crc32(0L, NULL, 0);
@@ -639,26 +795,26 @@ JOHN_DLL bool Str_Bool(const char* pstr);
 JOHN_DLL unsigned long Byte_Crc32(unsigned long crc, const unsigned char* buf, unsigned int len);
 
 
-//·Ö²½
+//åˆ†æ­¥
 typedef struct _TCrc64 TCrc64;
 JOHN_DLL TCrc64* Byte_Crc64Init();
 JOHN_DLL void Byte_Crc64Update(TCrc64* pcrc64, const void *data, size_t size);
-//pdigestÓë·µ»ØÖµ¹¦ÄÜÒ»Ñù
+//pdigestä¸è¿”å›å€¼åŠŸèƒ½ä¸€æ ·
 JOHN_DLL uint64_t Byte_Crc64Final(TCrc64* pcrc64, BYTE* pdigest/*=NULL*/);
 
-//Ò»²½µ½Î»
+//ä¸€æ­¥åˆ°ä½
 JOHN_DLL uint64_t Byte_Crc64(const void *data, size_t size);
 
 
-// base64±àÂë£¬·µ»ØÊä³ö strlen(dest)+1
-// Ê§°ÜµÄ»°·µ»Ø-1
-// ĞèÒª×Ô¼º¼ÓÉÏNULL
+// base64ç¼–ç ï¼Œè¿”å›è¾“å‡º strlen(dest)+1
+// å¤±è´¥çš„è¯è¿”å›-1
+// éœ€è¦è‡ªå·±åŠ ä¸ŠNULL
 JOHN_DLL size_t Byte_Base64Encode(char* dest, const char* src, size_t srcLen);
-// base64½âÂë£¬·µ»ØÊä³ö strlen(dest)
-// Ê§°ÜµÄ»°·µ»Ø-1
-// ĞèÒª×Ô¼º¼ÓÉÏNULL
+// base64è§£ç ï¼Œè¿”å›è¾“å‡º strlen(dest)
+// å¤±è´¥çš„è¯è¿”å›-1
+// éœ€è¦è‡ªå·±åŠ ä¸ŠNULL
 JOHN_DLL size_t Byte_Base64Decode(char* dest, const char* src, size_t srcLen);
-//Ô¤¹À´óĞ¡
+//é¢„ä¼°å¤§å°
 inline size_t Byte_Base64_EncodeLen(size_t srcLen)
 {
 	return ((srcLen + 2) / 3 * 4 + 1);
@@ -668,9 +824,12 @@ inline size_t Byte_Base64_DecodeLen(size_t srcLen)
 	return (srcLen / 4 * 3 + 2);
 }
 
+//base64 URL Encode æ¯”base64å¤šäº†:
+// + ---> -
+// / ---> _
 typedef enum {
-	INCLUDE_PADDING, /*ÔÊĞíÓĞ×îºóµÄ=Ìî³ä(ÈçÓĞ±ØÒªµÄ»°)*/
-	OMIT_PADDING     /*ÒÆ³ı×îºóµÄ=Ìî³ä*/
+	INCLUDE_PADDING, /*å…è®¸æœ‰æœ€åçš„=å¡«å……(å¦‚æœ‰å¿…è¦çš„è¯)*/
+	OMIT_PADDING     /*ç§»é™¤æœ€åçš„=å¡«å……*/
 }EBase64UrlEncodeKind;
 
 JOHN_DLL char* Byte_Base64UrlEncodePtr(
@@ -679,9 +838,9 @@ JOHN_DLL char* Byte_Base64UrlEncodePtr(
 );
 
 typedef enum {
-	REQUIRE_PADDING, /*Èç¹ûÎ´¶ÔÆëµÄ»°£¬ÒªÇóÄ©Î²±ØĞëÒªÓĞ=Ìî³ä*/
-	IGNORE_PADDING,  /*²»½éÒâÓĞÃ»ÓĞÕıÈ·µØÄ©Î²Ìî³ä*/
-	DISALLOW_PADDING /*¾Ü¾ø½ÓÊÜÓĞ=Ìî³äµÄ*/
+	REQUIRE_PADDING, /*å¦‚æœæœªå¯¹é½çš„è¯ï¼Œè¦æ±‚æœ«å°¾å¿…é¡»è¦æœ‰=å¡«å……*/
+	IGNORE_PADDING,  /*ä¸ä»‹æ„æœ‰æ²¡æœ‰æ­£ç¡®åœ°æœ«å°¾å¡«å……*/
+	DISALLOW_PADDING /*æ‹’ç»æ¥å—æœ‰=å¡«å……çš„*/
 }EBase64UrlDecodeKind;
 
 JOHN_DLL char* Byte_Base64UrlDecodePtr(
@@ -689,8 +848,8 @@ JOHN_DLL char* Byte_Base64UrlDecodePtr(
 	EBase64UrlDecodeKind decodeKind
 );
 
-//×Ö½Ú ---> Z85±àÂë
-// datasz_±ØĞë¿ÉÒÔ±»4Õû³ı£»
+//å­—èŠ‚ ---> Z85ç¼–ç 
+// datasz_å¿…é¡»å¯ä»¥è¢«4æ•´é™¤ï¼›
 //
 JOHN_DLL char* Byte_z85_encode(char* dest_, const BYTE* data_, size_t datasz_);
 inline size_t Byte_z85_EncodeLen(size_t srcLen)
@@ -698,7 +857,7 @@ inline size_t Byte_z85_EncodeLen(size_t srcLen)
 	return srcLen*5/4+1;
 }
 
-// strlen(string_)±ØĞë¿ÉÒÔ±»5Õû³ı£»
+// strlen(string_)å¿…é¡»å¯ä»¥è¢«5æ•´é™¤ï¼›
 JOHN_DLL BYTE* Byte_z85_decode(BYTE* dest_, const char* string_);
 inline size_t Byte_z85_DecodeLen(size_t srcLen)
 {
@@ -709,17 +868,18 @@ inline size_t Byte_z85_DecodeLen(size_t srcLen)
 // "0123A" ---> "3031323341"
 // buflen = srclen*2+1
 JOHN_DLL size_t Byte_ToHexStr(char* buffer, size_t buflen, const BYTE* pstrc, size_t srclen);
-//¿É´ø·Ö¸ô·û£¬Ò»°ãÊÇ¿Õ¸ñ
+//å¯å¸¦åˆ†éš”ç¬¦ï¼Œä¸€èˆ¬æ˜¯ç©ºæ ¼
 // buflen = srclen*3+1
 JOHN_DLL size_t Byte_ToHexStrDelimiter(char* buffer, size_t buflen, const BYTE* psrc, size_t srclen, char delimiter/*=0*/);
 
-// ²»´ø·Ö¸ô·ûÊ±£¬Ó¦µ± buflen >= srclen/2
-// ´ø·Ö¸ô·ûÊ±£¬Ó¦µ±   buflen > (srclen+1)/3+1
+// ä¸å¸¦åˆ†éš”ç¬¦æ—¶ï¼Œåº”å½“ buflen >= srclen/2
+// å¸¦åˆ†éš”ç¬¦æ—¶ï¼Œåº”å½“   buflen > (srclen+1)/3+1
 // If the buffer is too short, we return 0
 JOHN_DLL size_t Byte_FromHexStr(BYTE* pBuf, size_t buflen, const char* psrc, size_t srclen);
 JOHN_DLL size_t Byte_FromHexStrDelimiter(BYTE* pBuf, size_t buflen, const char* psrc, size_t srclen, char delimiter/*=0*/);
 
 JOHN_DLL char* Byte_ToHexStrPtr(int nBytes, const BYTE* pabyData);
+//ä¼šä¸ºè¾“å‡ºç»“æœæœ«å°¾åŠ \0
 JOHN_DLL BYTE* Byte_FromHexStrPtr(const char* pszHex, int* pnBytes/*=NULL*/);
 
 
@@ -732,22 +892,36 @@ inline bool Num_IsPowerOfTwo(uint32_t n)
 {
 	return n > 0 && ((n & (n - 1)) == 0);
 }
+inline bool Num_IsPowerOfTwo64(uint64_t value)
+{
+	return value > 0 && ((value & (value - 1)) == 0);
+}
+//bå¿…é¡»æ˜¯2çš„Næ¬¡æ–¹
+size_t Num_ModPowerOf2(uint64_t num, uint64_t b);
 
-//ËÄÉáÎåÈë
+//å››èˆäº”å…¥
 // -3.81 --> -4
 // 3.81  --> 4
 JOHN_DLL int Num_RoundInt(double value);
 
-// nPrecision=¶àÉÙÎ»Ğ¡Êı
+//Aå‘ä¸Šå¯¹é½
+#define NUM_ALIGN(A, L) (((A) + (L)-1) & ~((L)-1))
+
+// nPrecision=å¤šå°‘ä½å°æ•°
 // Num_RoundDouble(3.115, 2) --> 3.12
 // Num_RoundDouble(-3.115, 2) --> -3.12
 JOHN_DLL double Num_RoundDouble(double doValue, int nPrecision);
-
 JOHN_DLL bool Num_FloatsEqual(double dblA, double dblB);
 
-//ÏòÉÏÈ¡Õûµ½divisorµÄ±¶Êı
-//ÊÊÓÃÓÚdivisorÊÇ2µÄN´Î·½
-//Èç¹ûdivisor²»ÊÇ2µÄN´Î·½,ÄÇ½á¹û¾ÍºÜÄÑÔ¤ÁÏÁË¡£
+
+inline size_t Num_RoundDown(size_t addr, size_t rndDown)
+{
+	return (addr / rndDown) * rndDown;
+}
+
+//å‘ä¸Šå–æ•´åˆ°divisorçš„å€æ•°
+//é€‚ç”¨äºdivisoræ˜¯2çš„Næ¬¡æ–¹
+//å¦‚æœdivisorä¸æ˜¯2çš„Næ¬¡æ–¹,é‚£ç»“æœå°±å¾ˆéš¾é¢„æ–™äº†ã€‚
 // (4,5) --> 8
 // (4,3) --> 4
 // (4,4) --> 4
@@ -757,7 +931,7 @@ JOHN_DLL size_t Num_RoundUpToMultipleOf(size_t divisor, size_t x);
 // (8, 8) --> 8
 JOHN_DLL size_t Num_RoundDownToMultipleOf(size_t divisor, size_t x);
 
-//´øÒç³ö¼ì²éµÄ³Ë·¨
+//å¸¦æº¢å‡ºæ£€æŸ¥çš„ä¹˜æ³•
 JOHN_DLL size_t Num_CheckMul(size_t mul1, size_t mul2, bool *pbOverflowFlag);
 //7 --> 1
 //100 --> 3
@@ -768,20 +942,20 @@ JOHN_DLL int Num_CountDigits(uint64_t x);
 // Simplest single list
 /** List element structure. */
 
-// SListAppend(NULL, pData); //´´½¨ĞÂÁĞ±í
+// SListAppend(NULL, pData); //åˆ›å»ºæ–°åˆ—è¡¨
 JOHN_DLL SList* SListAppend(SList *psList, void *pData);
 
-//Ö»ÊÍ·ÅÈİÆ÷£¬²»¸ºÔğÊÍ·ÅÔªËØ¡£
-//ÊÍ·ÅÔªËØÊÇÓÃ»§×Ô¼ºµÄÔğÈÎ
+//åªé‡Šæ”¾å®¹å™¨ï¼Œä¸è´Ÿè´£é‡Šæ”¾å…ƒç´ ã€‚
+//é‡Šæ”¾å…ƒç´ æ˜¯ç”¨æˆ·è‡ªå·±çš„è´£ä»»
 JOHN_DLL void SListFree(SList* plist);
 
-//Èç¹ûÔªËØÊÇÊ¹ÓÃMem_malloc·ÖÅäµÄ»°£¬¿ÉÒÔÊ¹ÓÃ´Ë·½·¨
+//å¦‚æœå…ƒç´ æ˜¯ä½¿ç”¨Mem_mallocåˆ†é…çš„è¯ï¼Œå¯ä»¥ä½¿ç”¨æ­¤æ–¹æ³•
 JOHN_DLL void SListDeepFree(SList* plist);
 
-//nPositionÎª¸º£¬²»¸É»î
-//nPosition>ÒÑÓĞÔªËØ¸öÊı£¬ÒıÆğÁĞ±íÀ©ÕÅ£¬´Ó¶øÊ¹nPositionÓĞĞ§
-//nPosition<ÒÑÓĞÔªËØ¸öÊı, ²åÈëµ½Ö¸¶¨Î»ÖÃ
-//nPosition==ÒÑÓĞÔªËØ¸öÊı, ²åÈëµ½Ä©Î²
+//nPositionä¸ºè´Ÿï¼Œä¸å¹²æ´»
+//nPosition>å·²æœ‰å…ƒç´ ä¸ªæ•°ï¼Œå¼•èµ·åˆ—è¡¨æ‰©å¼ ï¼Œä»è€Œä½¿nPositionæœ‰æ•ˆ
+//nPosition<å·²æœ‰å…ƒç´ ä¸ªæ•°, æ’å…¥åˆ°æŒ‡å®šä½ç½®
+//nPosition==å·²æœ‰å…ƒç´ ä¸ªæ•°, æ’å…¥åˆ°æœ«å°¾
 JOHN_DLL SList* SListInsert(SList *psList, void *pData, int nPosition);
 
 // nPosition = 0 ~ n-1
@@ -789,7 +963,7 @@ JOHN_DLL SList* SListGet(SList *psList, int nPosition);
 
 JOHN_DLL SList* SListGetLast(SList *psList);
 
-//µü´úÈİÆ÷
+//è¿­ä»£å®¹å™¨
 #if 0
 SList* pCur = pList;
 while (pCur)
@@ -801,7 +975,7 @@ while (pCur)
 JOHN_DLL SList* SListGetNext(SList *psElement);
 
 JOHN_DLL void* SListGetData(const SList *psElement);
-//ÏÈSListGet, ÔÙSListGetData
+//å…ˆSListGet, å†SListGetData
 JOHN_DLL void* SListGetItemData(const SList *psList, int nPosition);
 
 //O(n)
@@ -818,11 +992,11 @@ JOHN_DLL SList* SListFind(SList *psList, PfnSListFind pfn, void *pFind);
 typedef void* (*PfnSListWalk)(SList *psElement, void* pExtra);
 JOHN_DLL void SListWalk(SList *psList, PfnSListWalk pfn, void* pExtra/*=NULL*/);
 
-//·µ»ØtrueµÄ»°£¬ÖĞÖ¹ºóĞøÉ¨Ãè
+//è¿”å›trueçš„è¯ï¼Œä¸­æ­¢åç»­æ‰«æ
 typedef bool (*PfnSListWalkUntil)(SList *psElement, void* pExtra);
 JOHN_DLL void SListWalkUntil(SList *psList, PfnSListWalkUntil pfn, void* pExtra/*=NULL*/);
 
-//¼òµ¥ÅÅĞò
+//ç®€å•æ’åº
 #if 0
 int MyCmp(const SList* pItem1, const SList* pItem2)
 {
@@ -840,12 +1014,76 @@ pList = SListSort(pList, MyCmp);
 typedef int (*PfnSListCompare)(const SList* pItem1, const SList* pItem2);
 JOHN_DLL SList* SListSort(SList *psList, PfnSListCompare pfnCompare);
 
+///////////////////////////////////////////
+// Simplest doule linked list
+typedef struct _DList_node_t DList_node_t;
+
+DList* DList_new(void);
+void DList_destroy(DList **self_p);
+
+//ä»¥ä¸‹ä¸‰ä¸ªå‡½æ•°ä¼šæ–½åŠ åœ¨æ¯ä¸ªå…ƒç´ ä¸Šï¼Œéƒ½æœ‰é»˜è®¤å€¼çš„ï¼ŒæŒ‰éœ€æä¾›å§ã€‚
+// Destruct an item
+typedef void (Pfn_DList_destructor)(void **item);
+// Duplicate an item
+typedef void* (Pfn_DList_duplicator)(const void *item);
+// Compare two items, for sorting
+typedef int (Pfn_DList_comparator)(const void *item1, const void *item2);
+void DListSetDestructor(DList *self, Pfn_DList_destructor destructor);
+void DListSetDuplicator(DList *self, Pfn_DList_duplicator duplicator);
+void DListSetComparator(DList *self, Pfn_DList_comparator comparator);
+
+//åˆ—è¡¨å…‹éš†ï¼Œå¦‚æœå®šä¹‰çš„æ‹·è´å™¨çš„è¯ï¼Œå¯¹æ¯ä¸ªå…ƒç´ æ‹·è´ä¸€ä»½ã€‚
+DList* DListClone(DList *self);
+
+//æ·»åŠ èŠ‚ç‚¹ï¼Œå¦‚æœå®šä¹‰çš„æ‹·è´å™¨çš„è¯ï¼Œä½¿ç”¨æ‹·è´å™¨æ‹·è´ä¸€ä»½ï¼›å¦åˆ™åªæ‹·è´åœ°å€ã€‚
+DList_node_t* DListAddStart(DList *self, void *item);
+DList_node_t* DListAddEnd(DList *self, void *item);
+//æ’å…¥ï¼Œå¦‚æœåŸæ¥æ˜¯æœ‰åºçš„è¯ï¼Œlow_begin==trueæ—¶ï¼Œä»å°åˆ°å¤§æœç´¢æ‰¾ä½ç½®ã€‚
+DList_node_t* DListInsert(DList *self, void *item, bool low_begin);
+
+size_t DListSize(const DList *self);
+
+//å–æ•°æ®,ä¸ç§»åŠ¨å½“å‰æŒ‡é’ˆ
+void* DListPickHead(DList *self);
+void* DListPickTail(DList *self);
+
+//å–æ•°æ®,ç§»åŠ¨å½“å‰æŒ‡é’ˆ
+void* DListGetFirst(DList *self);
+void* DListGetLast(DList *self);
+void* DListGetNext(DList *self);
+void* DListGetPrev(DList *self);
+
+void* DListCurData(DList *self);
+DList_node_t* DListCur(DList *self);
+
+void* DListGetNodeData(DList_node_t *handle);
+
+//é”€æ¯èŠ‚ç‚¹ï¼Œè¿”å›æ•°æ®
+//handle==NULL, å¯¹å½“å‰èŠ‚ç‚¹æ“ä½œ
+void* DListDetach(DList *self, DList_node_t *handle/*=NULL*/);
+void* DListDetachCur(DList *self);
+//é”€æ¯èŠ‚ç‚¹ï¼Œå¦‚æœæœ‰ææ„å™¨çš„è¯ï¼Œå¯¹æ•°æ®è°ƒç”¨ææ„å™¨
+//0--ok, -1--failed
+int DListDelete(DList *self, DList_node_t *handle/*=NULL*/);
+
+//æ‰¾åˆ°çš„è¯ï¼Œå½“å‰æŒ‡é’ˆä¹Ÿä¼šæŒ‡å‘åŒ¹é…é¡¹
+DList_node_t* DListFind(DList *self, void *item);
+
+void DListMoveStart(DList *self, DList_node_t *handle);
+void DListMoveEnd(DList *self, DList_node_t *handle);
+
+//delete all, å¦‚æœæœ‰ææ„å™¨çš„è¯ï¼Œç»™æ¯ä¸ªå…ƒç´ è°ƒç”¨ææ„å™¨
+void DListDeleteAll(DList *self);
+//ä½¿ç”¨æ¯”è¾ƒå™¨æ¥æ’åº
+void DListSort(DList *self);
+
 
 // windows relate
 JOHN_DLL void WaitCursor_Begin();
 JOHN_DLL void WaitCursor_End();
 
-//¼òµ¥´´½¨Ïß³Ì
+
+//ç®€å•åˆ›å»ºçº¿ç¨‹
 JOHN_DLL
 HANDLE Thread_Create(uint32_t stack_size/*=0*/, 
 					 uint32_t initflag/*=0*/,
@@ -854,7 +1092,7 @@ HANDLE Thread_Create(uint32_t stack_size/*=0*/,
 
 JOHN_DLL bool Thread_Join(HANDLE hnd, DWORD dwMs/*=INFINITE*/);
 
-//´Ëº¯ÊıÖ»ÊÊÓÃÓÚµ÷ÊÔ×´Ì¬,ÓÉthread×Ô¼ºµ÷ÓÃ
+//æ­¤å‡½æ•°åªé€‚ç”¨äºè°ƒè¯•çŠ¶æ€,ç”±threadè‡ªå·±è°ƒç”¨
 //sample: 
 //#ifdef _DEBUG
 //SetThreadName(GetCurrentThreadId(), name_.c_str());
@@ -864,31 +1102,39 @@ JOHN_DLL void Thread_SetName(DWORD thread_id, const char* name);
 JOHN_DLL HANDLE Thread_GetCurrentRealHandle(void);
 JOHN_DLL BOOL OS_DuplicatedHandle(DWORD sourcePID, HANDLE sourceHandle, HANDLE* pHandle);
 
-//ÔÚxpµÄ»°£¬ËüÊÇCRITICAL_SECTION
+//åœ¨xpçš„è¯ï¼Œå®ƒæ˜¯CRITICAL_SECTION
 typedef struct _John_rwlock John_rwlock;
 JOHN_DLL John_rwlock* John_rwlock_new();
 JOHN_DLL void John_rwlock_free(John_rwlock *lock);
 //0--ok
-//-1--Ê§°Ü
+//-1--å¤±è´¥
 JOHN_DLL int John_rwlock_rdlock(John_rwlock *lock);
 JOHN_DLL int John_rwlock_rdunlock(John_rwlock *lock);
 JOHN_DLL int John_rwlock_wrlock(John_rwlock *lock);
 JOHN_DLL int John_rwlock_wrunlock(John_rwlock *lock);
 
 
-// Ö»ÓĞÊÇ32bit appÔÚwin64ÔËĞĞÊ±£¬Wow64Process==TRUE
-// ÆäËüÊ±ºòÎªFALSE¡£
-// ·µ»ØÖµÃ»Ê²Ã´ÓÃ£¬½ö´ú±íº¯ÊıÊÇ·ñµ÷ÓÃ³É¹¦
+// åªæœ‰æ˜¯32bit appåœ¨win64è¿è¡Œæ—¶ï¼ŒWow64Process==TRUE
+// å…¶å®ƒæ—¶å€™ä¸ºFALSEã€‚
+// è¿”å›å€¼æ²¡ä»€ä¹ˆç”¨ï¼Œä»…ä»£è¡¨å‡½æ•°æ˜¯å¦è°ƒç”¨æˆåŠŸ
 JOHN_DLL BOOL Process_IsWow64(HANDLE hProcess, PBOOL Wow64Process);
 
 JOHN_DLL BOOL OS_Is64Bit();
 JOHN_DLL BOOL Process_ThisIs64Bit(void);
 JOHN_DLL BOOL Process_Is64Bit(HANDLE hProcess);
 
-//É±½ø³Ì£¬¼°Æä×Ó½ø³Ì
+//æ€è¿›ç¨‹ï¼ŒåŠå…¶å­è¿›ç¨‹
 JOHN_DLL BOOL Process_TerminateAll(HANDLE process, int code);
 
-//´´½¨×Ó½ø³Ì£¬²¢Ê¹ÓÃ¹ÜµÀÍ¨Ñ¶
+JOHN_DLL HANDLE Process_GetToken(DWORD dwProcessID);
+//æ˜¯å¦å…è®¸32bitçš„virtualization
+//virtualizationä»…ç”¨äºäº¤äº’ç”¨æˆ·ä»¥éç®¡ç†å‘˜æƒé™æ‰§è¡Œçš„32ä½ç¨‹åº
+JOHN_DLL BOOL Process_EnableVirtialization(HANDLE hTargetProcToken, BOOL bEnabled);
+
+//ç”¨äºè°ƒè¯•ï¼Œå †ç ´åæ—¶å´©æºƒç¨‹åº
+BOOL Process_EnableTerminationOnCorruption();
+
+//åˆ›å»ºå­è¿›ç¨‹ï¼Œå¹¶ä½¿ç”¨ç®¡é“é€šè®¯
 typedef struct Process_Pipe Process_Pipe_t;
 
 enum EProcessPipeType{
@@ -905,7 +1151,7 @@ JOHN_DLL size_t Process_Pipe_Write(Process_Pipe_t *pp, const uint8_t *data, size
 
 /**
  * Launch a child process with the specified arguments.
- * exePath Í¨³£ÊÇÈ«Â·¾¶
+ * exePath é€šå¸¸æ˜¯å…¨è·¯å¾„
  * @note argv[0] is ignored
  */
 JOHN_DLL
@@ -917,18 +1163,19 @@ BOOL Process_LaunchChild(const wchar_t *exePath,
 JOHN_DLL char* Process_MakeCommandLinePtrA(int argc, char **argv);
 JOHN_DLL wchar_t* Process_MakeCommandLinePtrW(int argc, wchar_t **argv);
 
-//Ö´ĞĞ½ø³Ì
-//pbHijackedÊÇ·ñ±»À¹½ØÖ´ĞĞ
+//æ‰§è¡Œè¿›ç¨‹
+//pbHijackedæ˜¯å¦è¢«æ‹¦æˆªæ‰§è¡Œ
 JOHN_DLL BOOL Process_ExecuteFile(const wchar_t* lpszFilename, 
 						const wchar_t* lpszParam/*=L""*/,
 						DWORD* pdwExitCode/*=NULL*/, 
 						BOOL* pbHijacked/* = NULL*/);
 
-//·µ»ØÖµÖ»´ú±íÃüÁîÓĞÖ´ĞĞ£¬µ«²»¹ØĞÄÖ´ĞĞ½á¹û
-JOHN_DLL BOOL Process_RunDOSCommandA(const char* pszCommand, BOOL bWaitForExit/*=true*/);
+//è¿”å›å€¼åªä»£è¡¨å‘½ä»¤æœ‰æ‰§è¡Œï¼Œä½†ä¸å…³å¿ƒæ‰§è¡Œç»“æœ
+//å¦‚æœbWaitForExit==true, é‚£ä¹ˆpoExitCodeè¿”å›ExitCode
+JOHN_DLL BOOL Process_RunDOSCommandA(const char* pszCommand, BOOL bWaitForExit/*=true*/, DWORD* poExitCode/*=NULL*/);
 //const wchar_t* pstrRemove = L"del C:\\Users\\john\\desktop\\Test2019.exe*.lnk";
 //bok = Process_RunDOSCommandW(pstrRemove, TRUE);
-JOHN_DLL BOOL Process_RunDOSCommandW(const wchar_t* pszCommand, BOOL bWaitForExit/*=true*/);
+JOHN_DLL BOOL Process_RunDOSCommandW(const wchar_t* pszCommand, BOOL bWaitForExit/*=true*/, DWORD* poExitCode/*=NULL*/);
 
 JOHN_DLL BOOL Process_Run(const wchar_t *application, HANDLE *process/*=NULL*/);
 JOHN_DLL HANDLE Process_RunAS(const wchar_t* application, 
@@ -947,26 +1194,38 @@ JOHN_DLL BOOL Process_RunWithRedirection(const wchar_t *application,
 
 JOHN_DLL BOOL Process_RunLowIntegrity(const wchar_t* pszCommandLine, HANDLE* phProcess/*=NULL*/);
 
-// pszProcessNameÍ¨³£ÊÇ xxx.exe
-// Í¬Ê±·µ»Ø¶à¸ö
+// pszProcessNameé€šå¸¸æ˜¯ xxx.exe
+// åŒæ—¶è¿”å›å¤šä¸ª
 // DWORD dwID = (DWORD)SListGetItemData(plist, 0);
 JOHN_DLL SList* Process_GetIdFromName(const wchar_t* pszProcessName);
 
+//bUserProcessOnly -- limit the same session ID of current user
+JOHN_DLL BOOL Process_GetActiveProcessId(const wchar_t* pstrExeName, BOOL bUserProcessOnly, DWORD* posid);
+
+JOHN_DLL BOOL Process_InjectExe(DWORD dwProcessId, const wchar_t* pszLibFile, DWORD dwMsTimeout/*=60000*/);
+
+//å¦‚æœpstrDumpFileä¸ºç©ºçš„è¯ï¼Œè¾“å‡ºåˆ°%temp%
+//å¦‚æœæ˜¯ (wchar_t*)20170701 çš„è¯ï¼Œè¾“å‡ºåˆ°exeæ‰€åœ¨ç›®å½•
+JOHN_DLL void Process_SetMiniDump(const wchar_t* pstrDumpPath/*=NULL*/, DWORD dumpType/*=(DWORD)MiniDumpNormal*/);
+
+//call the DllRegisterServer() from xx.ocx, xx.dll
+JOHN_DLL bool OS_RegisterComDll(const wchar_t* lpszModulePath);
+
 //get computer name
-//pstrOutÖÁÉÙÓ¦µ±Îª16¸ö×Ö·û(º¬NULL)
+//pstrOutè‡³å°‘åº”å½“ä¸º16ä¸ªå­—ç¬¦(å«NULL)
 JOHN_DLL bool OS_GetHostNamePtr(wchar_t* pstrOut, unsigned int cchOut);
 
-// Ìí¼Óµ½PATH»·¾³±äÁ¿
-// Ö»Ó°Ïì±¾½ø³Ì
+// æ·»åŠ åˆ°PATHç¯å¢ƒå˜é‡
+// åªå½±å“æœ¬è¿›ç¨‹
 JOHN_DLL BOOL OS_EnvPrependPath(const wchar_t* directoryToPrepend);
 
-//bExpand -- Èç¹ûÖµÀïÃæÓĞ±äÁ¿£¬ÊÇ·ñ³¢ÊÔÕ¹¿ª
+//bExpand -- å¦‚æœå€¼é‡Œé¢æœ‰å˜é‡ï¼Œæ˜¯å¦å°è¯•å±•å¼€
 JOHN_DLL char* OS_EnvGetPtrA(const char* pstrEnv, bool bExpand/*=false*/);
 JOHN_DLL wchar_t* OS_EnvGetPtrW(const wchar_t* pstrEnv, bool bExpand/*=false*/);
 
-//¼òµ¥get/set
-// cchVal°üº¬NULL
-// Ö»Ó°Ïì±¾½ø³Ì
+//ç®€å•get/set
+// cchValåŒ…å«NULL
+// åªå½±å“æœ¬è¿›ç¨‹
 JOHN_DLL BOOL OS_EnvGetA(const char* pstrEnv, char* pstrVal, size_t cchVal);
 JOHN_DLL BOOL OS_EnvGetW(const wchar_t* pstrEnv, wchar_t* pstrVal, size_t cchVal);
 
@@ -976,16 +1235,20 @@ JOHN_DLL BOOL OS_EnvSetW(const wchar_t* pstrEnv, const wchar_t* pstrVal);
 JOHN_DLL BOOL OS_EnvDeleteA(const char* pstrEnv);
 JOHN_DLL BOOL OS_EnvDeleteW(const wchar_t* pstrEnv);
 
-//¶ÔËùÓĞ%var%±äÁ¿½øĞĞÒ»´ÎÕ¹¿ª
+//å¯¹æ‰€æœ‰%var%å˜é‡è¿›è¡Œä¸€æ¬¡å±•å¼€
 //pstr = OS_EnvExpandPtrW(L"%JOHN2012%_%SystemRoot%");
 JOHN_DLL char* OS_EnvExpandPtrA(const char* s);
 JOHN_DLL wchar_t* OS_EnvExpandPtrW(const wchar_t* s);
 
+//ä¿®æ”¹ç³»ç»Ÿç¯å¢ƒå˜é‡
+// å½±å“ç³»ç»Ÿ
+JOHN_DLL BOOL OS_EnvSetSystemW(bool bUserEnv, const wchar_t* pstrKeyName, const wchar_t* pstrVal);
+JOHN_DLL BOOL OS_EnvDeleteSystemW(bool bUserEnv, const wchar_t* pstrKeyName);
 
 JOHN_DLL void FORCE_CDECL OS_MessageBoxA(HWND hwnd/* = null*/, const char* fmt, ...);
 JOHN_DLL void FORCE_CDECL OS_MessageBoxW(HWND hwnd/* = null*/, const wchar_t* fmt, ...);
 
-// ²Ù×÷ÏµÍ³°æ±¾´ÖÂÔÅĞ¶¨
+// æ“ä½œç³»ç»Ÿç‰ˆæœ¬ç²—ç•¥åˆ¤å®š
 JOHN_DLL bool OS_IsWindowsVistaOrGreater();
 JOHN_DLL bool OS_IsWindowsServer();
 JOHN_DLL bool OS_IsWindowsVersionOrGreater(WORD wMajorVersion, WORD wMinorVersion, WORD wServicePackMajor);
@@ -1004,19 +1267,19 @@ inline bool OS_IsWindows1OorGreater()
 }
 
 JOHN_DLL int OS_NumOfProcessCore();
-//È«²¿ÎïÀíÄÚ´æ£¬¿ÉÓÃÎïÀíÄÚ´æ£¬¶àÉÙMB
+//å…¨éƒ¨ç‰©ç†å†…å­˜ï¼Œå¯ç”¨ç‰©ç†å†…å­˜ï¼Œå¤šå°‘MB
 JOHN_DLL bool OS_PhysicalRAMSize(uint64_t* pnTotalPhys, uint64_t* pnAvailPhys);
 
-//·µ»Ø¿ÉÓÃbytes
-//pszDirnameÊÇÒ»¸öÒÑ¾­´æÔÚµÄÄ¿Â¼(²»ÔÊĞíÊÇ²»´æÔÚµÄ)
-//¿ÉÒÔÖ±½ÓÓÃ c:\ 
+//è¿”å›å¯ç”¨bytes
+//pszDirnameæ˜¯ä¸€ä¸ªå·²ç»å­˜åœ¨çš„ç›®å½•(ä¸å…è®¸æ˜¯ä¸å­˜åœ¨çš„)
+//å¯ä»¥ç›´æ¥ç”¨ c:\ 
 JOHN_DLL int64_t OS_GetDiskFreeSpace(const wchar_t* pszDirname);
 
 // pszPath like: c:\ 
 JOHN_DLL BOOL OS_IsSupportSparseFiles(const wchar_t* pszPath);
 
-// lpszPrivilegeÊÇ SE_*_NAME³£Á¿
-// Èç£ºSE_SECURITY_NAME
+// lpszPrivilegeæ˜¯ SE_*_NAMEå¸¸é‡
+// å¦‚ï¼šSE_SECURITY_NAME
 JOHN_DLL BOOL OS_EnableSpecifiedPrivilege(const wchar_t* lpszPrivilege, BOOL bEnable);
 JOHN_DLL char* OS_GetMachineGuidPtr();
 
@@ -1035,6 +1298,11 @@ JOHN_DLL BOOL OS_IsUserNonElevatedAdmin();
 // Determine the mandatory level of a SID
 JOHN_DLL HRESULT OS_GetSidIntegrityLevel(PSID sid, MANDATORY_LEVEL* level);
 
+//retrieve SID for UAC
+//need LocalFree(*sid);
+bool Process_GetCurrentSid(wchar_t** sid);
+
+
 // Determine the mandatory level of a process
 //   processID, the process to query, or (0) to use the current process
 //   On Vista, level should alwys be filled in with either
@@ -1044,13 +1312,31 @@ JOHN_DLL HRESULT OS_GetSidIntegrityLevel(PSID sid, MANDATORY_LEVEL* level);
 //   On error, level remains unchanged
 JOHN_DLL HRESULT OS_GetProcessIntegrityLevel(DWORD processID, MANDATORY_LEVEL* level, DWORD* pRID/*=NULL*/);
 
-// *pRID ÊÇRID£¬Èç£ºSECURITY_MANDATORY_MEDIUM_RID
+// *pRID æ˜¯RIDï¼Œå¦‚ï¼šSECURITY_MANDATORY_MEDIUM_RID
 JOHN_DLL BOOL OS_GetProcessIntegrityLevelByHandle(HANDLE hProcess, MANDATORY_LEVEL* level, DWORD* pRID/*=NULL*/);
 
-//¼ì²âÊÇ·ñ level < SECURITY_MANDATORY_MEDIUM_RID
-// Ò»°ãµÄ½ø³ÌÊÇSECURITY_MANDATORY_MEDIUM_RID
+//æ£€æµ‹æ˜¯å¦ level < SECURITY_MANDATORY_MEDIUM_RID
+// ä¸€èˆ¬çš„è¿›ç¨‹æ˜¯SECURITY_MANDATORY_MEDIUM_RID
 JOHN_DLL BOOL OS_IsCurrentProcessLowIntegrity();
 
+//Session ID
+JOHN_DLL BOOL OS_GetActiveSID(DWORD* posid);
+
+JOHN_DLL bool OS_GetUserNameAndDomain(wchar_t* szUser, DWORD* pcchUser, wchar_t* szDomain, DWORD* pcchDomain);
+
+JOHN_DLL BOOL Reg_CreateKey(HKEY hKey, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName);
+//å¯èƒ½é€’å½’åˆ é™¤
+JOHN_DLL BOOL Reg_DeleteKey(HKEY hKey, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName);
+JOHN_DLL BOOL Reg_GetKeyValue(HKEY hKEY, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName,
+							  void* pbOut, int cbOut, DWORD* poType/*=NULL*/);
+//cbOut including the last NULL
+JOHN_DLL BOOL Reg_GetStringValue(HKEY hKEY, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName, 
+								 wchar_t* pstrOut, int cchOut);
+JOHN_DLL BOOL Reg_SetStringValue(HKEY hKEY, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName, const wchar_t* pstr);
+JOHN_DLL BOOL Reg_GetDWORDValue(HKEY hKEY, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName, DWORD* dwValue);
+JOHN_DLL BOOL Reg_SetDWORDValue(HKEY hKEY, const wchar_t* pstrKeyPath, const wchar_t* pstrKeyName, DWORD dwValue);
+
+//////////////////////////////////////////////////////////////
 
 typedef struct IPC_pipe_server IPC_pipe_server_t;
 typedef struct IPC_pipe_client IPC_pipe_client_t;
@@ -1071,8 +1357,8 @@ JOHN_DLL SHMemory* OS_SHMemory_new();
 //free SHMemory
 JOHN_DLL void OS_SHMemory_free(SHMemory* pshm);
 
-//Create or OpenÑ¡ÆäÒ»
-//size±ØĞë´óÓÚ0
+//Create or Opené€‰å…¶ä¸€
+//sizeå¿…é¡»å¤§äº0
 JOHN_DLL BOOL OS_SHMemory_Create(SHMemory* pshm, const wchar_t* name, DWORD size, BOOL bLowIntegrity/*=FALSE*/);
 JOHN_DLL BOOL OS_SHMemory_Open(SHMemory* pshm, const wchar_t* name);
 
@@ -1087,20 +1373,22 @@ typedef struct _win_version_info {
 	int revis;
 }win_version_info;
 
-//path¿ÉÒÔÊÇÈ«Â·¾¶£¬Ò²¿ÉÒÔÊÇdllÃû
-//Èç£º File_GetVersion(L"kernel32", &ver);
+//pathå¯ä»¥æ˜¯å…¨è·¯å¾„ï¼Œä¹Ÿå¯ä»¥æ˜¯dllå
+//å¦‚ï¼š File_GetVersion(L"kernel32", &ver);
 JOHN_DLL bool File_GetVersion(const wchar_t* path, win_version_info* info);
-//×Ö½ÚÊı
+//å­—èŠ‚æ•°
 JOHN_DLL bool File_GetSize(const wchar_t* path, uint64_t* pusize);
 
+//æ”¹æ–‡ä»¶å¤§å°ï¼Œå¯æ”¶ç¼©ï¼Œä¹Ÿå¯æ‰©å¼ 
+JOHN_DLL bool File_ChangeSize(HANDLE h, uint64_t newlength);
 
-//±¾½ø³ÌÊ¹ÓÃµÄÄÚ´æbytes
+//æœ¬è¿›ç¨‹ä½¿ç”¨çš„å†…å­˜bytes
 JOHN_DLL size_t Process_GetMemoryUsage();
 
 //0.0.0.0
 JOHN_DLL char* File_GetModuleVerPtr(HMODULE hMod/*=NULL*/);
-//¹¦ÄÜ¸ü¶à
-//cchBufLenÊÇÃ¿¸ö»º³åÇøµÄ´óĞ¡
+//åŠŸèƒ½æ›´å¤š
+//cchBufLenæ˜¯æ¯ä¸ªç¼“å†²åŒºçš„å¤§å°
 JOHN_DLL bool File_GetModuleVerMore(
 	HMODULE hMod/*=NULL*/,
 	uint32_t cchBufLen,
@@ -1109,8 +1397,15 @@ JOHN_DLL bool File_GetModuleVerMore(
 	wchar_t *szFileVersion, wchar_t *szLegalCopyright,
 	wchar_t *szProductName, wchar_t *szProductVersion);
 
-//Ö»´Ósystem32ºÍÓÃ»§Ä¿Â¼¼ÓÔØdll
-JOHN_DLL void OS_DllHijackingProtection();
+// <0å¤±è´¥ï¼Œ0--successï¼Œ>0é‡å¯ååˆ é™¤
+JOHN_DLL int File_Delete(const wchar_t* path);
+JOHN_DLL BOOL File_DeleteAfterReboot(const wchar_t* path);
+JOHN_DLL BOOL File_Rename(const wchar_t *from, const wchar_t *to);
+
+JOHN_DLL void Process_EnableDEPPolicy();
+
+//åªä»system32å’Œç”¨æˆ·ç›®å½•åŠ è½½dll
+JOHN_DLL void Process_DllHijackingProtection();
 
 JOHN_DLL BOOL Win_IsGUIExecutable(HMODULE hMod/*=NULL*/);
 
@@ -1130,10 +1425,17 @@ JOHN_DLL HWND Win_GetTopLevelWindow(HWND hWnd);
 
 JOHN_DLL HICON Win_GetIconFromFile(const wchar_t* pstrFile);
 
-//ĞèÒª×Ô¼ºDeleteObject(hImageBMP);
+//éœ€è¦è‡ªå·±DeleteObject(hImageBMP);
 JOHN_DLL HBITMAP Bitmap_FromIcon(HICON hIcon, HBRUSH hBackground, int width, int height);
 JOHN_DLL HBITMAP Bitmap_FromRect(HWND hWnd, RECT* pRect);
-JOHN_DLL HBITMAP Bitmap_FromScreenRect(RECT* lpRect, BYTE *pData/*=NULL*/, BITMAPINFO *pHeader/*=NULL*/);
+JOHN_DLL HBITMAP Bitmap_FromScreenRect(RECT* lpRect);
+JOHN_DLL HBITMAP Bitmap_FromScreenRectEx(RECT* lpRect, BYTE *pData/*=NULL*/, BITMAPINFO *pHeader/*=NULL*/);
+JOHN_DLL HBITMAP Bitmap_FromDIB(void* pDIB, HPALETTE hPal/*=NULL*/);
+
+//ä¸è¦æ—¶ï¼Œä½¿ç”¨ DeleteObjecté‡Šæ”¾
+JOHN_DLL HPALETTE Bitmap_CreateDIBPalette(void* pDIB);
+//è¿”å›GlobalAllocåˆ†é…çš„å†…å­˜ï¼Œéœ€è¦è‡ªå·±GlobalFree
+JOHN_DLL HANDLE Bitmap_ToDIB(HBITMAP hBitmap, HPALETTE hPal/*=NULL*/);
 
 JOHN_DLL HICON Bitmap_ToIcon(HBITMAP BitmapHandle, int Width, int Height);
 
@@ -1159,32 +1461,32 @@ JOHN_DLL BOOL Bitmap_ToFileEx(HBITMAP hBitmap, const wchar_t* lpFileName, BYTE n
 
 JOHN_DLL void Bitmap_Flip(HBITMAP bitmap, int width, int height);
 
-// ¼ÓÔØ(.BMP .DIB .EMF .GIF .ICO .JPG .WMF)
+// åŠ è½½(.BMP .DIB .EMF .GIF .ICO .JPG .WMF)
 JOHN_DLL HBITMAP Bitmap_Load(const wchar_t *pszFileName, COLORREF clrBack/*=-1*/);
 JOHN_DLL HBITMAP Bitmap_LoadFromBuffer(const BYTE* pData, DWORD cbData, COLORREF clrBack/*=-1*/);
 
-
+JOHN_DLL COLORREF Bitmap_TransparentColor(COLORREF back_color, COLORREF front_color, double transparent_rate);
 
 // date time relate
 
-//ÈòÄê?
+//é—°å¹´?
 inline bool Time_IsLeapYear(int y)
 {
 	return ((y % 4) == 0 && (y % 100) != 0) || (y % 400) == 0;
 }
 
-//Ò»¸ötime_t¾ßÌåÒâÎ¶×ÅÊ²Ã´Ê±¼ä£¬ÊÇÓÉÓÃ»§¸³ÓèµÄÊ±Çø¾ö¶¨µÄ¡£
-//Ëü±¾ÉíÃ»ÓĞ´æ´¢Ê±ÇøĞÅÏ¢¡£
+//ä¸€ä¸ªtime_tå…·ä½“æ„å‘³ç€ä»€ä¹ˆæ—¶é—´ï¼Œæ˜¯ç”±ç”¨æˆ·èµ‹äºˆçš„æ—¶åŒºå†³å®šçš„ã€‚
+//å®ƒæœ¬èº«æ²¡æœ‰å­˜å‚¨æ—¶åŒºä¿¡æ¯ã€‚
 
 //JOHN_ASSERT(sizeof(int64_t) == sizeof(time_t));
 
 // 2019-12-20 12:30:50
 // at china, localTime = UTC+8
 JOHN_DLL const char* Time_LocalTimeStr(int64_t t);
-// 2019Äê12ÔÂ20ÈÕ 12:30:50
+// 2019å¹´12æœˆ20æ—¥ 12:30:50
 JOHN_DLL const wchar_t* Time_LocalTimeStr_Chn(int64_t t);
 
-// °ÑÊäÈëµÄt, °´UTC+0×ª»»³ÉÈÕÆÚ×Ö·û´®
+// æŠŠè¾“å…¥çš„t, æŒ‰UTC+0è½¬æ¢æˆæ—¥æœŸå­—ç¬¦ä¸²
 // 2019-12-20 4:30:50
 JOHN_DLL const char* Time_GMTTimeStr(int64_t t);
 
@@ -1194,8 +1496,8 @@ JOHN_DLL const wchar_t* Time_NowForFileNameW();
 
 // at china, localTime = UTC+8
 // at US, localTime = UTC-5
-JOHN_DLL char* Time_LocalTimeNowStr(char* buffer, size_t buffer_size);
-JOHN_DLL char* Time_UTCNowStr(char* buffer, size_t buffer_size);
+JOHN_DLL char* Time_LocalTimeNowStr(char* buffer, size_t cchBuf);
+JOHN_DLL char* Time_UTCNowStr(char* buffer, size_t cchBuf);
 
 //timestamp from local time zone
 JOHN_DLL int64_t Time_LocalTimeStamp();
@@ -1206,12 +1508,26 @@ JOHN_DLL int64_t Time_LocalTimeStamp();
 JOHN_DLL int64_t Time_MakeTime(int nYear, int nMonth, int nDay,
 							   int nHour, int nMin, int nSec, int nDST/*=0*/);
 
+// SYSTEMTIME <---> unix time
 // __time64_t ---> SYSTEMTIME
-JOHN_DLL bool Time_GetAsSystemTime(const int64_t* ptime, SYSTEMTIME* ptimeDest);
+JOHN_DLL bool Time_GetAsSystemTime(int64_t unixTime, SYSTEMTIME* ptimeDest);
+JOHN_DLL int64_t Time_SystemTimeToInt64(const SYSTEMTIME* psysTime);
+
 // FILETIME ---> __time64_t
-JOHN_DLL uint64_t Time_FileTimeToUint64(const FILETIME* pft);
+JOHN_DLL int64_t Time_FileTimeToInt64(const FILETIME* pft);
 JOHN_DLL bool Time_SecondsSince1601(unsigned year, unsigned month, unsigned day,
 	                                unsigned hour, unsigned min, unsigned sec, uint64_t* presSeconds);
+
+// millisecond(1601.01.01) ä¸å…·ä½“ç±»å‹äº’è½¬
+// timLocal	1592216882
+// ms	    13236719282000
+JOHN_DLL int64_t Time_UnixTimeToMs(int64_t unixTim);
+JOHN_DLL int64_t Time_MsToUnixTime(int64_t ms);
+
+JOHN_DLL FILETIME Time_MsToFileTime(int64_t ms);
+JOHN_DLL SYSTEMTIME Time_MsToSystemTime(int64_t ms);
+JOHN_DLL int64_t Time_SystemTimeToMs(const SYSTEMTIME* psysTm);
+JOHN_DLL int64_t Time_FileTimeToMs(const FILETIME* pfTim);
 
 JOHN_DLL double Time_DiffSecond(int64_t tEnd, int64_t tStart);
 JOHN_DLL double Time_DiffMinutes(int64_t tEnd, int64_t tStart);
@@ -1221,21 +1537,21 @@ JOHN_DLL double Time_DiffDays(int64_t tEnd, int64_t tStart);
 JOHN_DLL BOOL OS_CurrentCpuTime(uint64_t* ptimNow, uint64_t* ptimUser, uint64_t* ptimKernel);
 
 // Return current system clock as milliseconds. 
-//ms£¬13236255568034
-// Õâ¸öÖµ»áÒòÎªÏµÍ³µÄÊ±¼ä¸ü¸Ä¶ø¸Ä±ä£¬Ê¹ÓÃÊ±Òª×¢Òâ¡£
+//msï¼Œ13236255568034
+// è¿™ä¸ªå€¼ä¼šå› ä¸ºç³»ç»Ÿçš„æ—¶é—´æ›´æ”¹è€Œæ”¹å˜ï¼Œä½¿ç”¨æ—¶è¦æ³¨æ„ã€‚
 JOHN_DLL int64_t Time_ClockMS();
 
 //current monotonic clock in milliseconds
-//ms£¬ 208293938
-// Õâ¸öÖµ²»»áÒòÎªÏµÍ³µÄÊ±¼ä¸ü¸Ä£¬¿ÉÓÃÓÚÌØ¶¨³¡ºÏ¡£
+//msï¼Œ 208293938
+// è¿™ä¸ªå€¼ä¸ä¼šå› ä¸ºç³»ç»Ÿçš„æ—¶é—´æ›´æ”¹ï¼Œå¯ç”¨äºç‰¹å®šåœºåˆã€‚
 JOHN_DLL int64_t Time_ClockMono();
 
 //current monotonic clock in microseconds
-// us£¬208293938136
+// usï¼Œ208293938136
 JOHN_DLL int64_t Time_ClockUSec();
 
 /*
-ÓÃÓÚ³£¼ûÓ¢ÎÄÈÕÆÚ×Ö·û´®½âÊÍ£º
+ç”¨äºå¸¸è§è‹±æ–‡æ—¥æœŸå­—ç¬¦ä¸²è§£é‡Šï¼š
 	Sun, 06 Nov 1994 08:49:37 GMT  ; RFC 822, updated by RFC 1123
 	Sunday, 06-Nov-94 08:49:37 GMT ; RFC 850, obsoleted by RFC 1036
 	Sun Nov  6 08:49:37 1994       ; ANSI C's asctime() format
@@ -1255,21 +1571,26 @@ JOHN_DLL int64_t Time_ClockUSec();
 	2004/09/12
 	2020-03-31
 */
-//vs2005+Ä¬ÈÏÇé¿öÏÂ, sizeof(time_t)==8
+//vs2005+é»˜è®¤æƒ…å†µä¸‹, sizeof(time_t)==8
 //return:
 // 0 -- ok
 // -1 -- failed
 // 1 -- later
 // 2 -- sooner
-// ²»´øÊ±ÇøµÄ»°£¬·µ»ØµÄtime_tÊÇUTC+0£¬Òª×ª»»»Ø×ÖÃæÈÕÆÚµÄ»°£¬¿ÉÒÔ£º
+// ä¸å¸¦æ—¶åŒºçš„è¯ï¼Œè¿”å›çš„time_tæ˜¯UTC+0ï¼Œè¦è½¬æ¢å›å­—é¢æ—¥æœŸçš„è¯ï¼Œå¯ä»¥ï¼š
 //Time_Parse(pstrDateTim, &tim);
 //char* pstrTim = Time_GMTTimeStr(tim);
 JOHN_DLL int Time_Parse(const char *date, int64_t *ptimOut);
 
-//UTC+0 --> UTC+x (ÔÚÖĞ¹úÊÇUTC+8)
-//Ê±Çø±ä´óÁË£¬ËùÒÔ·µ»ØÖµ±äĞ¡ÁË¡£
+//UTC+0 --> UTC+x (åœ¨ä¸­å›½æ˜¯UTC+8)
+//æ—¶åŒºå˜å¤§äº†ï¼Œæ‰€ä»¥è¿”å›å€¼å˜å°äº†ã€‚
 // 1592245682 ---> 1592216882
 JOHN_DLL int64_t Time_UTC2Local(int64_t tim);
+//UTC+x --> UTC+0
+//time_t timLocal = time(NULL); //2020-06-15 18:28:02
+//timLocal	1592216882
+//timUTC	1592245682
+JOHN_DLL int64_t Time_Local2UTC(int64_t timLocal);
 
 //get exe name from HWND
 JOHN_DLL BOOL Win_GetExeName(HWND hwnd, wchar_t* szExeName, int cchExeName, DWORD* pdwProcessId/*=NULL*/);
@@ -1287,11 +1608,11 @@ JOHN_DLL BOOL Win_ModifyStyleEx(
 	DWORD dwAdd,
 	UINT nFlags/* = 0*/);
 
-// ·µ»Øhr´íÎóºÅµÄ½âÊÍ
-// ĞèÒªMem_free()ÊÍ·Å
-// hr ¿ÉÒÔÊÇGetLastError()µÄ·µ»ØÖµ£¬Ò²¿ÉÒÔÊÇCOMº¯Êı·µ»ØÖµ¡£
+// è¿”å›hré”™è¯¯å·çš„è§£é‡Š
+// éœ€è¦Mem_free()é‡Šæ”¾
+// hr å¯ä»¥æ˜¯GetLastError()çš„è¿”å›å€¼ï¼Œä¹Ÿå¯ä»¥æ˜¯COMå‡½æ•°è¿”å›å€¼ã€‚
 // dwLangId = MAKELANGID LANG_NEUTRAL, SUBLANG_DEFAULT);
-// ³£ÓÃµÄÊÇLANG_SYSTEM_DEFAULT, LANG_USER_DEFAULT
+// å¸¸ç”¨çš„æ˜¯LANG_SYSTEM_DEFAULT, LANG_USER_DEFAULT
 // english: MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US)
 //
 JOHN_DLL
@@ -1304,52 +1625,58 @@ wchar_t* Win_GetHRMessagePtrW(
 			HRESULT hr,
 			DWORD dwLangId/* = 0*/);
 
-//´°¿Ú°ëÍ¸Ã÷
+//çª—å£åŠé€æ˜
 // iAlpha = 0~100
 JOHN_DLL void Win_SetTransparentMode(HWND hwnd, BYTE iAlpha);
 
-//¼òµ¥Êä³öµ÷ÊÔĞÅÏ¢£¬Ä¬ÈÏ»º³åÇøÎª320¸ö×Ö·û
+//ç®€å•è¾“å‡ºè°ƒè¯•ä¿¡æ¯ï¼Œé»˜è®¤ç¼“å†²åŒºä¸º320ä¸ªå­—ç¬¦
 JOHN_DLL void FORCE_CDECL Debug_TraceA(const char *format, ...);
 JOHN_DLL void FORCE_CDECL Debug_TraceW(const wchar_t *format, ...);
 
+//ä¸é™å­—ç¬¦æ•°ç‰ˆæœ¬
+JOHN_DLL void FORCE_CDECL Debug_TraceExA(const char* format, ...);
+JOHN_DLL void FORCE_CDECL Debug_TraceExW(const wchar_t* format, ...);
 
 //Path,Direcotry, File
+
+JOHN_DLL BOOL Path_IsWritable(const wchar_t* pstrPath);
+
 //use COM, please remeber to call CoInitializeEx
-// pszLnkDirÊÇ´æ·Å*.lnkµÄÄ¿Â¼
+// pszLnkDiræ˜¯å­˜æ”¾*.lnkçš„ç›®å½•
 JOHN_DLL BOOL Path_CreateLnk(const wchar_t* pszLnkDir, const wchar_t* pszPath);
-//ÊÇ·ñ *.lnk
+//æ˜¯å¦ *.lnk
 JOHN_DLL BOOL Path_IsLnkFile(const wchar_t* pszPath);
 JOHN_DLL BOOL Path_GetLnkPath(const wchar_t* pszLnkFile, wchar_t* pszResPath, int cchResPath);
-//Èç¹ûpszPathÊÇÖ¸ÏòÄ¿Â¼µÄlnk£¬ÄÇÃ´Êä³öÆäÖ¸Ïòµ½pszResPath
+//å¦‚æœpszPathæ˜¯æŒ‡å‘ç›®å½•çš„lnkï¼Œé‚£ä¹ˆè¾“å‡ºå…¶æŒ‡å‘åˆ°pszResPath
 JOHN_DLL BOOL Path_IsLnkToDirectory(const wchar_t* pszPath, wchar_t* pszResPath, int cchResPath);
 
-//ÊÇ·ñÒÔ \ ½áÎ²
+//æ˜¯å¦ä»¥ \ ç»“å°¾
 JOHN_DLL bool Path_IsSlashEndA(const char* pstrPath);
 JOHN_DLL bool Path_IsSlashEndW(const wchar_t* pstrPath);
 
-// bKeepExist=true ±£Ö¤pstrPathºóÃæÓĞÒ»¸ö \ ½áÎ²
-// ÓÃ»§×Ô¼º±£Ö¤pstrPathÓ¦µ±ÓĞ¶àÒ»¸ö×Ö·ûµÄÄÚ´æ£¬ÒÔ±¸¼ÓÉÏ \ 
+// bKeepExist=true ä¿è¯pstrPathåé¢æœ‰ä¸€ä¸ª \ ç»“å°¾
+// ç”¨æˆ·è‡ªå·±ä¿è¯pstrPathåº”å½“æœ‰å¤šä¸€ä¸ªå­—ç¬¦çš„å†…å­˜ï¼Œä»¥å¤‡åŠ ä¸Š \ 
 JOHN_DLL bool Path_KeepSlashEndA(char* pstrPath, bool bKeepExist/*=true*/);
 JOHN_DLL bool Path_KeepSlashEndW(wchar_t* pstrPath, bool bKeepExist/*=true*/);
 
 // c:\123\, file.txt ---> c:\123\file.txt
 // c:\123, file.txt  ---> c:\123\file.txt
-// ÆäÖĞÒ»¸öÎª¿ÕµÄ»°£¬·µ»ØÁíÒ»¸öµÄ¿½±´
+// å…¶ä¸­ä¸€ä¸ªä¸ºç©ºçš„è¯ï¼Œè¿”å›å¦ä¸€ä¸ªçš„æ‹·è´
 JOHN_DLL char* Path_MakeFilePathPtrA(const char* pstrDir, const char* pstrFile);
 JOHN_DLL wchar_t* Path_MakeFilePathPtrW(const wchar_t* pstrDir, const wchar_t* pstrFile);
 
-// >0³É¹¦£¬<=0Ê§°Ü
-// cchPathÓ¦µ±°üº¬NULL
+// >0æˆåŠŸï¼Œ<=0å¤±è´¥
+// cchPathåº”å½“åŒ…å«NULL
 JOHN_DLL int Path_CurrentDirA(char* path, int cchPath);
 JOHN_DLL int Path_CurrentDirW(wchar_t *path, int cchPath);
 
 // "d:\\temp\\..\\mydir\\program\\.\\..\\..\\22.txt" ---> "d:\\22.txt"
-//ÅöÉÏÎŞĞ§Â·¾¶µÄ»°£¬¾¡Á¿ÈÃËü¹æÕû¡£"d:\\\\..\\..\\..\\..\\22.txt" --> "d:\\22.txt"
-// ·µ»Ø¼ò»¯ºóµÄÊµ¼Ê×Ö·ûÊı
+//ç¢°ä¸Šæ— æ•ˆè·¯å¾„çš„è¯ï¼Œå°½é‡è®©å®ƒè§„æ•´ã€‚"d:\\\\..\\..\\..\\..\\22.txt" --> "d:\\22.txt"
+// è¿”å›ç®€åŒ–åçš„å®é™…å­—ç¬¦æ•°
 JOHN_DLL int Path_Canonicalize(wchar_t* path);
 
 /*
-* ÓëPath_Canonicalize¹¦ÄÜÒ»Ñù£¬²»¹ıĞŞÕıÎŞĞ§Â·¾¶µÄ·½Ê½²»Ò»Ñù¡£
+* ä¸Path_CanonicalizeåŠŸèƒ½ä¸€æ ·ï¼Œä¸è¿‡ä¿®æ­£æ— æ•ˆè·¯å¾„çš„æ–¹å¼ä¸ä¸€æ ·ã€‚
 * "d:\\\\..\\..\\..\\..\\22.txt" --> "\22.txt"
 * "d:\\\\..\\..\\..\\..\\."      --> "\."
 *
@@ -1363,7 +1690,7 @@ JOHN_DLL int Path_Canonicalize(wchar_t* path);
 JOHN_DLL int Path_SimplifyNameA(char *pszBuf, int cchBuf);
 JOHN_DLL int Path_SimplifyNameW(wchar_t *pszBuf, int cchBuf);
 
-// ÓÃÓÚ³¤Â·¾¶£¬ËõÂÔÏÔÊ¾£¬²»¿ÉÄæ
+// ç”¨äºé•¿è·¯å¾„ï¼Œç¼©ç•¥æ˜¾ç¤ºï¼Œä¸å¯é€†
 // C:\\Program Files (x86)\\HTML Help Workshop\include\\htmlhelp.h --> C:\Program Files ...\htmlhelp.h
 JOHN_DLL bool Path_Compact(const wchar_t* lpstrIn, wchar_t* lpstrOut, int cchOut);
 
@@ -1375,7 +1702,7 @@ JOHN_DLL bool Path_Compact(const wchar_t* lpstrIn, wchar_t* lpstrOut, int cchOut
  * filename.  If there is no path in the passed filename an empty string
  * will be returned (not NULL).
  *
- * bKeepLastSlash Èç¹ûÂ·¾¶×îºóÓĞ/»ò\µÄ»°£¬ÊÇ·ñ±£Áô?
+ * bKeepLastSlash å¦‚æœè·¯å¾„æœ€åæœ‰/æˆ–\çš„è¯ï¼Œæ˜¯å¦ä¿ç•™?
  *
  * Path_GetPathPtrA("C:\\", false) == "C:"
  * Path_GetPathPtrA("C:\\", true) == "C:\\"
@@ -1400,8 +1727,8 @@ JOHN_DLL wchar_t *Path_GetPathPtrW(const wchar_t *pszFilename, bool bKeepLastSla
 JOHN_DLL const char* Path_GetBasenameA(const char *pszFullFilename);
 JOHN_DLL const wchar_t* Path_GetBasenameW(const wchar_t *pszFullFilename);
 
-//Éú³ÉexeÄ¿Â¼ÏÂÎÄ¼şÂ·¾¶
-// pstrFileÎª¿ÕÔò£¬·µ»ØexeËùÓĞÄ¿Â¼¡£ÀıÈç£º d:\\johnsingdebug\\ 
+//ç”Ÿæˆexeç›®å½•ä¸‹æ–‡ä»¶è·¯å¾„
+// pstrFileä¸ºç©ºåˆ™ï¼Œè¿”å›exeæ‰€æœ‰ç›®å½•ã€‚ä¾‹å¦‚ï¼š d:\\johnsingdebug\\ 
 JOHN_DLL char* Path_MakeExePathFilePtrA(HMODULE module_handle/*=NULL*/, const char* pstrFile);
 JOHN_DLL wchar_t* Path_MakeExePathFilePtrW(HMODULE module_handle/*=NULL*/, const wchar_t* pstrFile);
 
@@ -1409,11 +1736,11 @@ JOHN_DLL wchar_t* Path_MakeExePathFilePtrW(HMODULE module_handle/*=NULL*/, const
 JOHN_DLL bool Path_IsFullPathA(const char* szPath);
 JOHN_DLL bool Path_IsFullPathW(const wchar_t* szPath);
 
-//µ¯³öÑ¡ÔñÂ·¾¶¿ò£¬Ñ¡ÔñÂ·¾¶
+//å¼¹å‡ºé€‰æ‹©è·¯å¾„æ¡†ï¼Œé€‰æ‹©è·¯å¾„
 JOHN_DLL wchar_t* Path_SelectFolderPtr(HWND hWnd, const wchar_t* pstrDefaultDir, const wchar_t* pstrTitle);
 
-//µ¯³öÍ¨ÓÃ¶Ô»°¿ò£¬Ñ¡ÔñÎÄ¼şÃû
-//»º³åÇøÖÁÉÙÓ¦µ±Îª FILENAME_MAX(260)
+//å¼¹å‡ºé€šç”¨å¯¹è¯æ¡†ï¼Œé€‰æ‹©æ–‡ä»¶å
+//ç¼“å†²åŒºè‡³å°‘åº”å½“ä¸º FILENAME_MAX(260)
 JOHN_DLL
 bool OS_GetFileName(HWND hwnd,
 	const wchar_t* dlgtitle/*=NULL*/,
@@ -1422,11 +1749,11 @@ bool OS_GetFileName(HWND hwnd,
 	size_t cchFileName,
 	bool save);
 
-// °ÑÎÄ¼ş(¼Ğ)¾²Ä¬µØÒÆµ½»ØÊÕÕ¾£¬³ö´íÊ±Ò²²»±¨´í¡£
-// bPhyDelete=TRUEÊ±£¬ÊµÊ©ÎïÀíÉ¾³ı£¬²»ÔÊĞí³·Ïú
+// æŠŠæ–‡ä»¶(å¤¹)é™é»˜åœ°ç§»åˆ°å›æ”¶ç«™ï¼Œå‡ºé”™æ—¶ä¹Ÿä¸æŠ¥é”™ã€‚
+// bPhyDelete=TRUEæ—¶ï¼Œå®æ–½ç‰©ç†åˆ é™¤ï¼Œä¸å…è®¸æ’¤é”€
 JOHN_DLL BOOL Path_Recycle(const wchar_t* pszPath, BOOL bPhyDelete/*=FALSE*/);
 
-// cchFileName = MAX_PATH, APIÏŞÖÆ£¬ÔÙ´óÒ²Ã»Ê²Ã´ÓÃ¡£
+// cchFileName = MAX_PATH, APIé™åˆ¶ï¼Œå†å¤§ä¹Ÿæ²¡ä»€ä¹ˆç”¨ã€‚
 JOHN_DLL HRESULT Path_GetTempFilenameA(char* pstrFilename, int cchFileName, const char* pszPrefix/*=NULL*/);
 JOHN_DLL HRESULT Path_GetTempFilenameW(wchar_t* pstrFilename, int cchFileName, const wchar_t* pszPrefix/*=NULL*/);
 
@@ -1437,7 +1764,7 @@ JOHN_DLL wchar_t* Path_GetAbsolutePath(const wchar_t *pstrRelatePath, wchar_t *p
 JOHN_DLL wchar_t* Path_GetAbsolutePathPtr(const wchar_t* path);
 
 typedef enum _eSpecialPath {
-	SP_Desktop,    /*×ÀÃæĞéÄâÄ¿Â¼*/
+	SP_Desktop,    /*æ¡Œé¢è™šæ‹Ÿç›®å½•*/
 	SP_DesktopDir, /*C:\Documents and Settings\ username\Desktop*/
 	SP_AppData,    /*C:\Documents and Settings\ username\Application Data*/
 	SP_LocalAppData, /*C:\Documents and Settings\ username\Local Settings\Application Data*/
@@ -1464,35 +1791,36 @@ SP_StartUp   --> C:\Users\Johnsing\AppData\Roaming\Microsoft\Windows\Start Menu\
 SP_System    --> C:\WINDOWS\system32
 */
 
-// ·µ»ØµÄÂ·¾¶Ä©Î²ÊÇÃ»ÓĞslashµÄ
-// Èç¹ûpstrDirOrFilenameÓĞ¶«Î÷µÄ»°£¬°ÑpstrDirOrFilenameÒ²¼ÓÉÏ
+// è¿”å›çš„è·¯å¾„æœ«å°¾æ˜¯æ²¡æœ‰slashçš„
+// å¦‚æœpstrDirOrFilenameæœ‰ä¸œè¥¿çš„è¯ï¼ŒæŠŠpstrDirOrFilenameä¹ŸåŠ ä¸Š
 JOHN_DLL wchar_t* Path_GetSpecialPathPtr(const wchar_t* pstrDirOrFilename/*=NULL*/, ESpecialPath kind);
 
 
-// ¸ù¾İµØÖ·À´·µ»ØÄ£¿éËùÓĞµÄÂ·¾¶
-// Í¨³£ÓÃÓÚocx, dllÖ®ÀàµÄ
+// æ ¹æ®åœ°å€æ¥è¿”å›æ¨¡å—æ‰€æœ‰çš„è·¯å¾„
+// é€šå¸¸ç”¨äºocx, dllä¹‹ç±»çš„
 // sample: Path_ModulePathFromAddrPtr(&Path_ModulePathFromAddrPtr, NULL); ==> "d:\johnsingtest"
 JOHN_DLL wchar_t* Path_ModulePathFromAddrPtr(void* ptrAddr, HMODULE* poModule/*=NULL*/);
 
-// ¼ì²éÎÄ¼ş»òÎÄ¼ş¼ĞÊÇ·ñ´æÔÚ
-// bCheckDir == trueÊ±¼ì²éÎÄ¼ş¼Ğ
+// æ£€æŸ¥æ–‡ä»¶æˆ–æ–‡ä»¶å¤¹æ˜¯å¦å­˜åœ¨
+// bCheckDir == trueæ—¶æ£€æŸ¥æ–‡ä»¶å¤¹
 JOHN_DLL bool Path_IsExist(const wchar_t* filepath_in, bool bCheckDir);
 
-// Ò»´Î´´½¨¶à²ãÄ¿Â¼
+JOHN_DLL bool Path_IsAclSupportedForPath(const wchar_t* path);
+JOHN_DLL bool Path_SetSecurityDescriptor(const wchar_t* path, PSECURITY_DESCRIPTOR* sd);
+
+// ä¸€æ¬¡åˆ›å»ºå¤šå±‚ç›®å½•
 JOHN_DLL BOOL Path_CreateDirRecur(const wchar_t* full_path);
-// É¾³ı¶à²ãÄ¿Â¼£¬ÓëPath_Recycle¹¦ÄÜÒ»Ñù
-// pszPathÒÔ\\½áÎ²£¬ÈİÁ¿×îÉÙÓ¦µ±Îªwcslen(pszPath)+2
-// ·µ»ØÖµÊÇGetLastError(), ³É¹¦ERROR_SUCCESS
-JOHN_DLL DWORD Path_DeleteDirRecur(wchar_t* pszPath);
+// åˆ é™¤å¤šå±‚ç›®å½•ï¼Œä¸Path_RecycleåŠŸèƒ½ä¸€æ ·
+JOHN_DLL BOOL Path_DeleteDirRecur(const wchar_t* pszPath);
 
 
-// É¨Ãè£¬·µ»ØËùÓĞÆ¥ÅäµÄÎÄ¼şµÄÈ«Â·¾¶
-// extTypeFilterÓ¦µ±ÀàËÆÓÚ£º "*.dll", "123?.txt"
-// Ê¹ÓÃSListDeepFreeÊÍ·ÅÄÚ´æ
+// æ‰«æï¼Œè¿”å›æ‰€æœ‰åŒ¹é…çš„æ–‡ä»¶çš„å…¨è·¯å¾„
+// extTypeFilteråº”å½“ç±»ä¼¼äºï¼š "*.dll", "123?.txt"
+// ä½¿ç”¨SListDeepFreeé‡Šæ”¾å†…å­˜
 SList* Path_GetFilesInFolderPtrW(const wchar_t* inFolder, const wchar_t* extTypeFilter);
 
-//È¡µÃÒÑ¼ÓÔØdllÄ£¿éµÄÎ»ÖÃ
-// bShortName==true,Â·¾¶¹ı³¤µÄ»°£¬×ª»»³ÉDOS¶ÌÂ·¾¶
+//å–å¾—å·²åŠ è½½dllæ¨¡å—çš„ä½ç½®
+// bShortName==true,è·¯å¾„è¿‡é•¿çš„è¯ï¼Œè½¬æ¢æˆDOSçŸ­è·¯å¾„
 JOHN_DLL
 BOOL Path_GetModuleDirByHandle(
 	HMODULE hMod,
@@ -1500,7 +1828,7 @@ BOOL Path_GetModuleDirByHandle(
 	wchar_t*  pszBuf,
 	DWORD   cchBuf);
 
-// moduleName²»·Ö´óĞ¡Ğ´£¬²»´øºó×ºµÄ»°£¬Ä¬ÈÏÊÇdll
+// moduleNameä¸åˆ†å¤§å°å†™ï¼Œä¸å¸¦åç¼€çš„è¯ï¼Œé»˜è®¤æ˜¯dll
 JOHN_DLL
 BOOL Path_GetLoadedModuleDir(
 	const wchar_t* moduleName,
@@ -1511,48 +1839,53 @@ BOOL Path_GetLoadedModuleDir(
 /* File_MiniCopy
 *	fIn:		Source file pathname.
 *	fOut:		Destination file pathname.
-*   return:     -1 ÎÄ¼ş²Ù×÷Ê§°Ü
-*               -2 ÎÄ¼ş¹ı´ó
+*   return:     -1 æ–‡ä»¶æ“ä½œå¤±è´¥
+*               -2 æ–‡ä»¶è¿‡å¤§
 *               -3 mapping file error
 *                0 ok
-* for x86, Ö»Ö§³ÖĞ¡ÎÄ¼ş¿½±´
+* for x86, åªæ”¯æŒå°æ–‡ä»¶æ‹·è´
  */
 JOHN_DLL int File_MiniCopy(const wchar_t *src, const wchar_t *dst);
 
-// ¸ºÊı±íÊ¾Ê§°Ü
+// è´Ÿæ•°è¡¨ç¤ºå¤±è´¥
 JOHN_DLL int File_ReadByHandle(HANDLE fd, void *buf, DWORD cbBuf);
 JOHN_DLL int File_WriteByHandle(HANDLE fd, void *buf, DWORD cbBuf);
 JOHN_DLL int File_ReadByPath(const wchar_t *filepath, void *data_out, size_t size);
 JOHN_DLL int File_WriteByPath(const wchar_t *filepath, bool bCreateAlways/*=false*/, const void *data, size_t size);
+JOHN_DLL bool File_AppendToFile(const wchar_t* filename, const void* data, int size);
 
 JOHN_DLL BOOL File_IsLocked(const wchar_t* lpszFile);
 JOHN_DLL BOOL File_SetWritable(const wchar_t *path, BOOL bWritable);
 JOHN_DLL BOOL File_SetHidden(const wchar_t *path, BOOL hidden);
-//ĞŞ¸Ä×îºó·ÃÎÊÊ±¼ä
+//ä¿®æ”¹æœ€åè®¿é—®æ—¶é—´
 JOHN_DLL BOOL File_Touch(const wchar_t* path);
+
+//åˆ›å»ºä¸´æ—¶æ–‡ä»¶ï¼Œå…³é—­åè‡ªåŠ¨åˆ é™¤
+JOHN_DLL HANDLE File_TempFile();
+
 
 //Config file
 typedef struct TConf_tag TConf;
 
 typedef enum
 {
-	// note: ²âÊÔÊÇ·ñ³É¹¦£¬Ó¦¸ÃÓÃ (retval >= 0)
+	// note: æµ‹è¯•æ˜¯å¦æˆåŠŸï¼Œåº”è¯¥ç”¨ (retval >= 0)
 	TCE_OK = 0,        //No error
 	TCE_UPDATED = 1,   //An existing value was updated
 	TCE_INSERTED = 2,  //A new value was inserted
 
-	// note: ²âÊÔÊÇ·ñÊ§°Ü£¬Ó¦¸ÃÓÃ (retval < 0)
+	// note: æµ‹è¯•æ˜¯å¦å¤±è´¥ï¼Œåº”è¯¥ç”¨ (retval < 0)
 	TCE_FAIL = -1,    //Generic failure
 	TCE_NOMEM = -2,   //Out of memory error
 	TCE_FILE = -3     //File error (see errno for detail error)
 } TCONF_ERR;
 
-//ÎÄ±¾µÄ±àÂë
+//æ–‡æœ¬çš„ç¼–ç 
 typedef enum
 {
-	TConf_DT_MBCS,
-	TConf_DT_UTF8,
-	TConf_DT_WCHAR
+	TConf_DT_MBCS=0,
+	TConf_DT_UTF8=1,
+	TConf_DT_WCHAR=2
 } TConf_DataType;
 
 JOHN_DLL TConf* Conf_new(TConf_DataType charType/*=TConf_DT_MBCS*/, bool bCaseSent/*=false*/, bool bMultiLine/*=false*/);
@@ -1567,7 +1900,7 @@ JOHN_DLL void Conf_SetUseSpaces(TConf* pconf, bool bSpaces/* = true*/);
 JOHN_DLL bool Conf_IsUsingSpaces(const TConf* pconf);
 JOHN_DLL bool Conf_IsEmpty(const TConf* pconf);
 
-//¼ÓÔØÊı¾İ
+//åŠ è½½æ•°æ®
 JOHN_DLL TCONF_ERR Conf_LoadFileA(TConf* pconf, const char* pszFile);
 JOHN_DLL TCONF_ERR Conf_LoadFileW(TConf* pconf, const wchar_t* pwszFile);
 JOHN_DLL TCONF_ERR Conf_LoadData(TConf* pconf, const BYTE* byData, size_t byLen);
@@ -1576,10 +1909,10 @@ JOHN_DLL TCONF_ERR Conf_SaveFileA(TConf* pconf, const char* pszFile, bool bAddSi
 JOHN_DLL TCONF_ERR Conf_SaveFileW(TConf* pconf, const wchar_t* pwszFile, bool bAddSign);
 JOHN_DLL TCONF_ERR Conf_SaveDataBuf(TConf* pconf, Johnbuf* buf, bool bAddSign);
 
-//SectionÏÂkeyµÄ¸öÊı
+//Sectionä¸‹keyçš„ä¸ªæ•°
 JOHN_DLL int Conf_GetSectionKeyCount(TConf* pconf, const wchar_t* pSection);
 
-//SListÄÚ´æ·ÅµÄwchar_t*ÓÉÄÚ²¿¹ÜÀí£¬²»ĞèÒªÊÍ·Å¡£½öĞèÒªÊÍ·ÅSList*
+//SListå†…å­˜æ”¾çš„wchar_t*ç”±å†…éƒ¨ç®¡ç†ï¼Œä¸éœ€è¦é‡Šæ”¾ã€‚ä»…éœ€è¦é‡Šæ”¾SList*
 JOHN_DLL SList* Conf_GetAllSections(TConf* pconf);
 JOHN_DLL SList* Conf_GetSectionAllKeys(TConf* pconf, const wchar_t* pSection);
 
@@ -1591,7 +1924,7 @@ const wchar_t* Conf_GetValueW(
 	const wchar_t* pstrDefault/*=NULL*/
 );
 
-//mbcs°æ±¾£¬Òª×Ô¼ºMem_free
+//mbcsç‰ˆæœ¬ï¼Œè¦è‡ªå·±Mem_free
 JOHN_DLL
 char* Conf_GetValueAPtr(
 	TConf* pconf,
@@ -1600,7 +1933,7 @@ char* Conf_GetValueAPtr(
 	const char* pstrDefault/*=NULL*/
 );
 
-//´´½¨Section»òkey
+//åˆ›å»ºSectionæˆ–key
 JOHN_DLL
 TCONF_ERR Conf_SetValueW(
 	TConf* pconf,
@@ -1636,7 +1969,7 @@ TCONF_ERR Conf_SetBoolValue(
 	const wchar_t* pstrComment /*= NULL*/
 );
 
-//Ö§³Ö10½øÖÆÊı×Ö£¬ÒÔ¼°0x12345678Ê®Áù½øÖÆ×Ö·û´®
+//æ”¯æŒ10è¿›åˆ¶æ•°å­—ï¼Œä»¥åŠ0x12345678åå…­è¿›åˆ¶å­—ç¬¦ä¸²
 JOHN_DLL
 long Conf_GetLongValue(
 	TConf* pconf,
@@ -1709,15 +2042,16 @@ bool Conf_DeleteSection(
 //Resource
 JOHN_DLL bool Resource_Load(HMODULE hMod, LPCWSTR Type, LPCWSTR ID, HRSRC* hoResource, HGLOBAL* hoGlobal);
 JOHN_DLL bool Resource_LoadWithLang(HMODULE hMod, LPCWSTR Type, LPCWSTR ID, WORD wLanguage, HRSRC* hoResource, HGLOBAL* hoGlobal);
+JOHN_DLL HRESULT Resource_ExtractToFile(HMODULE hMod, const wchar_t* resourceName, const wchar_t* targetFilename);
 JOHN_DLL DWORD Resource_GetSize(HMODULE hMod, HRSRC hResource);
 JOHN_DLL LPVOID Resource_Lock(HGLOBAL hGlobal);
 JOHN_DLL void Resource_Release(HGLOBAL hGlobal);
 
-//Ö±½Óload RT_RCDATA
+//ç›´æ¥load RT_RCDATA
 JOHN_DLL LPVOID Resource_LoadData(HMODULE hMod, const wchar_t* resId, DWORD* pdwSize/*=NULL*/);
 
 /*
-¼ÆËãÊ±¼ä²î£º
+è®¡ç®—æ—¶é—´å·®ï¼š
 	timStart = PerfTimer_GetTime();
 	Sleep(100);
 	timEnd = PerfTimer_GetTime();
@@ -1727,9 +2061,9 @@ JOHN_DLL LPVOID Resource_LoadData(HMODULE hMod, const wchar_t* resId, DWORD* pdw
 JOHN_DLL int64_t PerfTimer_GetTime();
 JOHN_DLL int64_t PerfTimer_GetPerfTimerFreq();
 
-// us, Î¢Ãë, 1us = 1ms/1000;
+// us, å¾®ç§’, 1us = 1ms/1000;
 JOHN_DLL double PerfTimer_ToMicroseconds(const double perfTime);
-// ms, ºÁÃë
+// ms, æ¯«ç§’
 JOHN_DLL double PerfTimer_ToMilliseconds(const double perfTime);
 // s
 JOHN_DLL double PerfTimer_ToSeconds(const double perfTime);
@@ -1739,8 +2073,8 @@ JOHN_DLL uint64_t PerfTimer_FromMilliseconds(const double milliseconds);
 JOHN_DLL uint64_t PerfTimer_FromSeconds(const double seconds);
 
 
-//¼ì²âÊÇ·ñÓĞÌØ¶¨¸ñÊ½Êı¾İÔÚclipboard
-// pformatsÒÔ0×÷ÎªÖÕ½á
+//æ£€æµ‹æ˜¯å¦æœ‰ç‰¹å®šæ ¼å¼æ•°æ®åœ¨clipboard
+// pformatsä»¥0ä½œä¸ºç»ˆç»“
 JOHN_DLL bool Clipboard_ContainsFormat(const UINT* pformats);
 JOHN_DLL bool Clipboard_HasImage();
 JOHN_DLL bool Clipboard_HasString();
@@ -1760,10 +2094,8 @@ typedef struct _MD5Context Hash_MD5_CTX;
 JOHN_DLL Hash_MD5_CTX* Hash_MD5_new();
 JOHN_DLL void Hash_MD5_free(Hash_MD5_CTX* context);
 JOHN_DLL void Hash_MD5_Update(Hash_MD5_CTX *context, unsigned char const *buf, unsigned len);
-//pdigest ÖÁÉÙÒª16¸ö×Ö½Ú
+//pdigest è‡³å°‘è¦16ä¸ªå­—èŠ‚
 JOHN_DLL void Hash_MD5_Final(Hash_MD5_CTX *context, unsigned char* pdigest);
-// Ò»²½µ½Î»
-JOHN_DLL char* Hash_MD5_StrPtr(const char *pszText);
 
 // SHA1 hash
 typedef struct _Hash_SHA1_CTX Hash_SHA1_CTX;
@@ -1771,10 +2103,19 @@ typedef struct _Hash_SHA1_CTX Hash_SHA1_CTX;
 JOHN_DLL Hash_SHA1_CTX* Hash_SHA1_new();
 JOHN_DLL void Hash_SHA1_free(Hash_SHA1_CTX *ctx);
 JOHN_DLL int Hash_SHA1_Update(Hash_SHA1_CTX *ctx, const void *data, size_t len);
-//pdigest ÖÁÉÙÒª20¸ö×Ö½Ú
+//pdigest è‡³å°‘è¦20ä¸ªå­—èŠ‚
 JOHN_DLL int Hash_SHA1_Final(Hash_SHA1_CTX *ctx, BYTE* pdigest);
-// Ò»²½µ½Î»
+
+
+// ä¸€æ­¥åˆ°ä½,éœ€è‡ªå·±Mem_free
+JOHN_DLL char* Hash_MD5_StrPtr(const char* pszText);
+JOHN_DLL char* Hash_MD5_BytePtr(const BYTE* pbData, size_t nData);
 JOHN_DLL char* Hash_SHA1_StrPtr(const char *pszText);
+JOHN_DLL char* Hash_SHA1_BytePtr(const BYTE* pbData, size_t nData);
+JOHN_DLL char* Hash_SHA256_StrPtr(const char* pszText);
+JOHN_DLL char* Hash_SHA256_BytePtr(const BYTE* pbData, size_t nData);
+JOHN_DLL char* Hash_SHA3_256_StrPtr(const char* pszText);
+JOHN_DLL char* Hash_SHA3_256_BytePtr(const BYTE* pbData, size_t nData);
 
 
 typedef void* TCiper;
@@ -1815,48 +2156,68 @@ JOHN_DLL void Ciper_free(TCiper c);
 JOHN_DLL void Ciper_require_datalen(TCiper c, int* pnIVorBlkLen, int* pnKey);
 JOHN_DLL void Ciper_setiv(TCiper c, const void *iv);
 JOHN_DLL void Ciper_setkey(TCiper c, const void *key);
-//·½±ãÊ¹ÓÃµÄ×Ö·û´®°æ±¾
+//æ–¹ä¾¿ä½¿ç”¨çš„å­—ç¬¦ä¸²ç‰ˆæœ¬
 JOHN_DLL bool Ciper_setivStr(TCiper c, const char *iv);
 JOHN_DLL bool Ciper_setkeyStr(TCiper c, const char *key);
 
-//lenÓ¦µ±ÊÇpnIVorBlkLenµÄÕûÊı±¶
+//lenåº”å½“æ˜¯pnIVorBlkLençš„æ•´æ•°å€
 JOHN_DLL void Ciper_encrypt(TCiper c, void *blk, int len);
 JOHN_DLL void Ciper_decrypt(TCiper c, void *blk, int len);
 
-//·â×°ÒÔÉÏÁ½¸ö·½·¨
-//´ÓpRawData¸´ÖÆÊı¾İµ½blk£¬²»×ãblkLenµÄ»°£¬Ìî³äNULL¡£ÔÙÊµÊ©¼ÓÃÜ£¬½âÃÜ¡£
+//å°è£…ä»¥ä¸Šä¸¤ä¸ªæ–¹æ³•
+//ä»pRawDataå¤åˆ¶æ•°æ®åˆ°pDataï¼Œä¸è¶³blkLençš„è¯ï¼Œå¡«å……ã€‚å†å®æ–½åŠ å¯†ã€‚
+// <0 å¤±è´¥
+// >0 å†™åˆ°pDataçš„æœ‰æ•ˆå­—èŠ‚æ•°
+// blkå’ŒpRawDataå…è®¸æ˜¯åŒä¸€ä¸ªåœ°å€ã€‚
+//
 //// Sample:
 /*
-int nRemaing = nRawData;
-const BYTE* pSrc = (BYTE*)pstrDecode;
-for (BYTE* ptr = (BYTE*)pstrEncoded;
-	nRemaing > 0;
-	nRemaing -= nIVorBlkLen)
-{
-	int nData = min(nIVorBlkLen, nRemaing);
-	Ciper_CryptEx(pciperDec, false, ptr, nIVorBlkLen, pSrc, nData);
-	ptr += nData;
-	pSrc += nData;
-}
+	int nRemaing = nSrcLen;
+	const BYTE* pSrc = (BYTE*)pstrText;
+	for (BYTE* ptr = (BYTE*)pstrBuf; nRemaing>0; nRemaing -= nIVorBlkLen)
+	{
+		int nData = min(nIVorBlkLen, nRemaing);
+		Ciper_CryptEx(pciper, true, ptr, nIVorBlkLen, pSrc, nData);
+		ptr += nData;
+		pSrc += nData;
+	}
+
+//also
+Ciper_CryptEx(pciper, true, pstrBuf, nNewLen, pstrText, nSrcLen);
+Ciper_CryptEx(pciperDec, false, pstrBuf, nNewLen, pstrBuf, nNewLen);
 */
-JOHN_DLL bool Ciper_CryptEx(TCiper c, bool bEncrypt, void *blk, int blkLen, const void* pRawData, int rawDataLen);
+JOHN_DLL int Ciper_CryptEx(TCiper c, bool bEncrypt, void *pData, int cbData, const void* pRawData, int rawDataLen);
 
 typedef enum _EHashKind
 {
-	ESSH_SHA256,    //32bytes½á¹û
+	ESSH_SHA256,    //32bytesç»“æœï¼Œè‡ªåŠ¨é€‰æ‹©è½¯ç¡¬ä»¶æ–¹å¼
 	ESSH_SHA256_HW,
 	ESSH_SHA256_SW,
-	ESSH_SHA384,   //48bytes½á¹û
-	ESSH_SHA512    //64bytes½á¹û
+	ESSH_SHA384,   //48bytesç»“æœ
+	ESSH_SHA512,   //64bytesç»“æœ
+	ESSH_SHA3_224, //28bytesç»“æœ
+	ESSH_SHA3_256,
+	ESSH_SHA3_384,
+	ESSH_SHA3_512  //64bytesç»“æœ
 }EHashKind;
 
 JOHN_DLL THash Hash_new(EHashKind kind);
 JOHN_DLL void Hash_free(THash h);
 JOHN_DLL void Hash_require_datalen(THash h, int* pnBlockLen/*=NULL*/, int* pnResult);
 JOHN_DLL bool Hash_put_data(THash h, void* data, unsigned int data_len);
-//outvalµÄ´óĞ¡£¬Ó¦¸ÃÖÁÉÙÊÇpnResultµÄ´óĞ¡
+//outvalçš„å¤§å°ï¼Œåº”è¯¥è‡³å°‘æ˜¯pnResultçš„å¤§å°
 JOHN_DLL bool Hash_final(THash h, unsigned char* outval);
 
+
+//è¿”å›å¡«å……åçš„å¤§å°
+JOHN_DLL unsigned int Byte_pkcs7_PadedLen(unsigned int _datalen, unsigned char _blocksize);
+// >0, å¡«å……åçš„å¤§å°
+// =0, ä¸éœ€è¦å¡«å……
+JOHN_DLL unsigned int Byte_pkcs7_Padding(void* pData, unsigned int cbData, unsigned char nBlockSize);
+
+// >0, è¿”å›æœ‰æ•ˆæ•°æ®çš„é•¿åº¦ï¼Œæœ‰æ•ˆæ•°æ®çš„ä¸‹ä¸€ä¸ªå­—èŠ‚ç½®NULL
+// =0, éªŒè¯ä¸é€šè¿‡
+JOHN_DLL unsigned int Byte_pkcs7_Unpadding(void* pData, unsigned int cbDataPaded, unsigned char nBlockSize);
 
 ////////////////////////////////////////////////////////
 JOHN_C_END
@@ -1884,6 +2245,7 @@ public:
 	}
 private:
 	CAutoMemFree();
+	CAutoMemFree(const CAutoMemFree&);
 	T* m_ptr;
 };
 

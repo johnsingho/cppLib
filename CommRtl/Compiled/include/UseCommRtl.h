@@ -5,8 +5,9 @@
 /*现在只有V141_XP版本*/
 #define USE_XP_PLATFORM
 
-/*使用调试版的dll, 不过会有额外的dll依赖*/
-//#define USE_SINGLIB_DEBUGDLL
+/*是否使用CommRtl动态库*/
+//#define USE_COMMRTL_DLL
+
 
 #include "CommRtl.h"
 
@@ -68,7 +69,7 @@
 #endif
 
 
-#if defined(USE_SINGLIB_DEBUGDLL) && ((defined(_DEBUG) || defined(DEBUG)))
+#if defined(USE_COMMRTL_DLL) && ((defined(_DEBUG) || defined(DEBUG)))
 #define JF_DEBUG "D"
 #else
 #define JF_DEBUG ""
@@ -82,9 +83,13 @@
 
 /////////////////////////////////////////////////
 
-
-#pragma comment(lib, "../lib/" JF_BIT JF_DEBUG  "/dll/" "CommRtl" JF_BIT JF_DEBUG ".lib") 
-
+#if !defined(USE_COMMRTL_DLL)
+//use static lib
+#pragma comment(lib, "../lib/" JF_BIT JF_DEBUG  "/static/" "CommRtlStatic" JF_BIT JF_DEBUG ".lib") 
+#else
+//use dll
+#pragma comment(lib, "../lib/" JF_BIT JF_DEBUG  "/dll/" "CommRtl" JF_BIT ".lib") 
+#endif
 
 //for include:  $(HELIB)\SingLib\Compiled_CommRtl\include
 //for lib:      $(HELIB)\SingLib\Compiled_CommRtl\lib
