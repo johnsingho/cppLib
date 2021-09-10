@@ -1,31 +1,54 @@
-﻿///////////////////////////////////////////////////////////////////////////////
-//
-//  Module: jaslog.h
-//
-//  Desc: simple log for ansi only
-//
-//  Writer: H.Z.XIN 2016-09-13
-//
-//  Copyright (c) 2016 cygcontrol
-//
-///////////////////////////////////////////////////////////////////////////////
-#ifndef JASLOG_H_2016_
+﻿#ifndef JASLOG_H_2016_
 #define JASLOG_H_2016_
+#pragma once
+/*****************************************************************************
+* Name     : jaslog.h
+* Creator  : H.Z.XIN
+* Date     : 2016-09-13
+* Function : simple log for ansi only
+* Parameter:
+* Return(s):
+* Notices  : Copyright (c) 2016 cygcontrol
+------------------------------------------------------------------------------
+Change Log:
+  2016-09-13        H.Z.XIN        Create
+  2021-05-21        H.Z.XIN        Update JOHN_DLL
+*****************************************************************************/
 
-#ifdef JOHN_EXPORTS
+#if defined(_MSC_VER)
+//编译dll时定义此宏
+#if defined(JOHN_EXPORTS)
+#	define JOHN_DLL __declspec(dllexport)
+#elif defined(JOHN_IMPORTS)
+//使用dll时定义此宏
+#	define JOHN_DLL __declspec(dllimport)
+#else
+//啥也不定义可用作静态库
+#	define JOHN_DLL
+#endif
+#	define JOHN_LOCAL
+#elif defined (__CYGWIN__)
+#   define JOHN_DLL
+#else
+#if (defined __GNUC__ && __GNUC__ >= 4) || defined __INTEL_COMPILER
+#if defined(JOHN_EXPORTS) || defined(JOHN_IMPORTS)
+//#define JOHN_DLL  __attribute__ ((visibility ("default")))
+//#define JOHN_LOCAL  __attribute__ ((visibility ("hidden")))
 #include "dllexport.h"
 #else
-#if defined(_WIN32) || defined(_MSC_VER)
-#define OS_WIN   1
-#define JOHN_DLL __declspec(dllimport)
-#else
-#define OS_POSIX 1
-#if __GNUC__ >= 4
-#define JOHN_DLL  __attribute__ ((visibility ("default")))
+#define JOHN_DLL
+#define JOHN_LOCAL
+#endif
 #else
 #define JOHN_DLL
+#define JOHN_LOCAL
 #endif
 #endif
+
+#if defined(_WIN32) || defined(_MSC_VER)
+#define OS_WIN   1
+#else
+#define OS_POSIX 1
 #endif
 
 //#include <string>
@@ -189,6 +212,7 @@ const LogSeverity LOG_NUM_SEVERITIES = 4;
 JOHN_DLL void JasLogSimpleA(const char* file, int line, LogSeverity severity, const char* pstr);
 JOHN_DLL void JOHN_CDECL JohnLogMoreA(const char* file, int line, LogSeverity severity, const char* fmt, ...);
 JOHN_DLL void JOHN_CDECL JohnLogVA(const char* file, int line, LogSeverity severity, const char* fmt, va_list ap);
+//Platform log, log with last error code
 JOHN_DLL void JasPLogA(const char* file, int line, LogSeverity severity, const char* pstr);
 JOHN_DLL int JasLogHex(const void* data, size_t data_length, LogSeverity severity);
 
