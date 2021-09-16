@@ -13,6 +13,7 @@
 Change Log:
   2016-09-13        H.Z.XIN        Create
   2021-05-21        H.Z.XIN        Update JOHN_DLL
+  2021-09-15        H.Z.XIN        allow limit log size
 *****************************************************************************/
 
 #if defined(_MSC_VER)
@@ -158,6 +159,12 @@ JOHN_DLL void JasLog_SetMinLevel(int level);
 
 // Gets the current log level.
 JOHN_DLL int JasLog_GetMinLevel();
+
+//限制日志文件的大小，单位MB
+// -1 -- unlimit
+JOHN_DLL void JasLog_SetLimitSize(int nMBLimit);
+JOHN_DLL int JasLog_GetLimitSize();
+
 
 // 是否应该输出此等级的日志
 JOHN_DLL bool JasLog_ShouldOutputLog(int severity);
